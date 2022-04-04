@@ -3,7 +3,7 @@ chanmod.py:  Methods for modeling multi-path channels
 """
 
 import numpy as np
-#import numexpr as ne
+import numexpr as ne
 import copy
 from mmwchanmod.common.constants import LinkState
 
@@ -158,9 +158,8 @@ def dir_path_loss(tx_arr, rx_arr, chan, return_elem_gain=True,\
             out.append(rx_bf)
         return out
 
-def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan, distance3D:float,
-                             long_term_bf:bool = True, isdrone:bool = False, frequency:int = 28e9,
-                             uplink = True):
+def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan,
+                             isdrone:bool = False,  return_elem_gain = True):
     """
     Computes the directional path loss between list of RX and TX arrays.
     This is typically used when the TX or RX have multiple sectors
@@ -190,15 +189,15 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan, di
     """
 
     if chan.link_state == LinkState.no_link:
-        sect_ind_ue = 0
+        #sect_ind_ue = 0
         sect_ind_bs = 0
         zero_array = np.array([0])
-        w_bs, w_ue = zero_array, zero_array
+        #w_bs, w_ue = zero_array, zero_array
         bs_elem_gain_dict, ue_elem_gain_dict = {i:zero_array for i in range(3)}, {i:zero_array for i in range(3)}
         bs_sv_dict, ue_sv_dict = {i:zero_array for i in range(3)}, {i:zero_array for i in range(3)}
     else:
-        im = 0
-        sect_ind_ue = 0
+        #im = 0
+        #sect_ind_ue = 0
         sect_ind_bs = 0
         # Get the angles of the path
         # Note that we have to convert from inclination to elevation angle
@@ -215,38 +214,58 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan, di
         for i_ue, ue_arr in enumerate(ue_arr_list):
             for i_bs, bs_arr in enumerate(bs_arr_list):
                 # this is up-link case: arrival angles at BSs
-                bs_svi, bs_elem_gaini = bs_arr.sv(aod_phi, aod_theta,\
-                                                return_elem_gain=True, drone = False)
-                # departure angles at UEs
-                ue_svi, ue_elem_gaini = ue_arr.sv(aoa_phi, aoa_theta
-                                                ,return_elem_gain=True, drone = isdrone) #, drone = True
+                if return_elem_gain is True:
+                    bs_elem_gaini = bs_arr.sv(aod_phi, aod_theta,\
+                                                    return_elem_gain=return_elem_gain, drone = False)
+                    # departure angles at UEs
+                    ue_elem_gaini = ue_arr.sv(aoa_phi, aoa_theta
+                                                    ,return_elem_gain=return_elem_gain, drone = isdrone) #, drone = True
 
-                fspl = 20*np.log10(distance3D) + 20*np.log10(frequency) - 147.55
-                chan.pl[chan.pl<fspl] = fspl
-                # Compute path loss with element gains
-                pl_elemi = chan.pl - bs_elem_gaini - ue_elem_gaini
-                bs_elem_gain_dict[i_bs] = bs_elem_gaini
-                ue_elem_gain_dict[i_bs] = ue_elem_gaini
+                    # Compute path loss with element gains
+                    pl_elemi = chan.pl - bs_elem_gaini - ue_elem_gaini
+                    bs_elem_gain_dict[i_bs] = bs_elem_gaini
+                    ue_elem_gain_dict[i_bs] = ue_elem_gaini
+                    # Select the path with the lowest path loss
+                    pl_mini = np.min(pl_elemi)
+                    if pl_mini < pl_min:
+                        pl_min = pl_mini
+                        im = np.argmin(pl_elemi)
+                        sect_ind_ue = i_ue
+                        sect_ind_bs = i_bs
 
-                bs_elem_gain_lin_i = 10 ** (0.05 * bs_elem_gaini)
-                ue_elem_gain_lin_i = 10 ** (0.05 * ue_elem_gaini)
+                else:
+                    bs_svi = bs_arr.sv(aod_phi, aod_theta, \
+                                              return_elem_gain=return_elem_gain, drone=False)
+                    # departure angles at UEs
+                    ue_svi = ue_arr.sv(aoa_phi, aoa_theta
+                                              , return_elem_gain=return_elem_gain, drone=isdrone)  #
 
-                bs_sv_dict[i_bs] = bs_svi/ bs_elem_gain_lin_i[:, None]
-                ue_sv_dict[i_bs]  = ue_svi/ ue_elem_gain_lin_i[:, None]
-                # Select the path with the lowest path loss
-                pl_mini = np.min(pl_elemi)
-                if pl_mini < pl_min:
-                    pl_min = pl_mini
-                    im = np.argmin(pl_elemi)
-                    sect_ind_ue = i_ue
-                    sect_ind_bs = i_bs
+                    bs_sv_dict[i_bs] = bs_svi#/ bs_elem_gain_lin_i[:, None]
+                    ue_sv_dict[i_bs]  = ue_svi#/ ue_elem_gain_lin_i[:, None]
 
-        #bs_elem_gain = bs_elem_gain_dict[sect_ind_bs]
-        #ue_elem_gain  = ue_elem_gain_dict[sect_ind_bs]
 
+    if return_elem_gain is True: # if it returns element gains only
+        out = {'bs_elem_gain_dict':bs_elem_gain_dict,
+               'ue_elem_gain_dict':ue_elem_gain_dict,
+               'sect_ind': sect_ind_bs
+              }
+    else: # it it returns spatial channels only
+      out ={
+          'bs_sv_dict':bs_sv_dict,
+          'ue_sv_dict':ue_sv_dict,
+          }
+
+    return out
+
+
+
+
+
+''' 
+       
         bs_sv = bs_sv_dict[sect_ind_bs]
         ue_sv = ue_sv_dict[sect_ind_bs]
-
+        
         n_rand = 10
         if long_term_bf is True:
             bs_sv2, ue_sv2 = copy.deepcopy(bs_sv), copy.deepcopy(ue_sv)
@@ -302,24 +321,7 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan, di
             w_ue = np.conj(ue_sv[im,:])
             w_ue = w_ue / np.sqrt(np.sum(np.abs(w_ue)**2))
 
-
-    # Get outputs
-    out ={
-          'w_bs':w_bs,
-          'w_ue':w_ue,
-          'bs_elem_gain_dict':bs_elem_gain_dict,
-          'ue_elem_gain_dict':ue_elem_gain_dict,
-          'bs_sv_dict':bs_sv_dict,
-          'ue_sv_dict':ue_sv_dict,
-          'sect_ind': sect_ind_bs}
-
-    return out
-
-
-
-
-
-'''          
+             
    # compute long-term beamforming gain over small scale fading         
             bf_gain_list = np.zeros((n_rand,), dtype= complex)
             ue_bf = np.zeros((n_rand,n_path))

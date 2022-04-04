@@ -1,6 +1,4 @@
 import numpy as np
-import sys;
-sys.path.append('..')
 from mmwchanmod.sim.antenna import Elem3GPP
 from mmwchanmod.sim.array import URA, multi_sect_array
 
@@ -10,7 +8,7 @@ class BS(object):
     """
     def __del__(self):
         pass
-    def __init__(self, bs_type: int = 1, bs_id: int = 0, network = None, channel_info = None, loc: list =[]):
+    def __init__(self, bs_type=1, bs_id=0, network = None, channel_info = None, loc =[]):
         # 1 is terrestrial, 0 is aerial
         # half power beamwidth for horizontal and vertical axis
         thetabw, phibw = 65, 65
@@ -63,7 +61,7 @@ class BS(object):
         else:
             self.arr_gnb_list = arr_gnb_list_a
 
-
+        self.w_bs = dict()
         self.bs_sv, self.ue_sv = dict(), dict()
         self.link_state = dict()
 
@@ -116,11 +114,10 @@ class BS(object):
     def get_antenna_array(self):
         return self.arr_gnb_list
 
-    def set_snr_by_sidelobe(self, ue_tx_power, ue_id,  pl_gain_no_BS_after_association, sect_n, serv_ue = False):
+    def set_snr_by_sidelobe(self, ue_id,  pl_gain_no_BS_after_association, sect_n, serv_ue = False):
         # set beamforming vector for uplink case
-        snr =self.channel_info.UE_TX_power - pl_gain_no_BS_after_association - self.channel_info.KT \
-                                - self.channel_info.NF - 10 * np.log10(self.channel_info.BW/100000)
-
+        snr = self.channel_info.UE_TX_power - pl_gain_no_BS_after_association - self.channel_info.KT \
+                                - self.channel_info.NF - 10 * np.log10(self.channel_info.BW)
         if serv_ue is True:
             self.SNR_u[(ue_id, sect_n)] = 10 ** (0.1 * snr)
         else:
@@ -155,13 +152,17 @@ class BS(object):
             self.ue_sv[(ue_id, i)] = data['ue_sv_dict'][i].T
 
             self.H[(ue_id, i)] = self.bs_sv[(ue_id,i)].dot(np.matrix.conj(self.ue_sv[(ue_id, i)]).T)
+
             N_r, N_t = self.H[(ue_id, i)].shape
             H_fro_norm = np.linalg.norm(self.H[(ue_id,i)], 'fro')
             if H_fro_norm !=0:
                 self.H[(ue_id,i)] *= np.sqrt(N_t * N_r) / H_fro_norm
+
         self.link_state[ue_id] = link_state
         # pure pathloss
         self.pl[ue_id] = np.array(pl, dtype = float)
+        # beamforming vector toward optimal sector of BS needs to be kept
+        self.w_bs[ue_id] = data['w_bs']
 
 
 
@@ -176,9 +177,61 @@ class BS(object):
         self.connected_rx_power_list = np.append(self.connected_rx_power_list, Rx_power)
 
     
-    def decide_connection_multi_UE(self,uav_access_bs_t:bool= True, max_n:int=2):
+    def decide_connection_multi_UE(self,uav_percentage=0.5, max_n=2):
         """
-        Decide and constrain the connections based on maximum number, max_n
+        Decide and constrain the connection based on percentage of uav
+
+        Parameters
+        ----------
+        uav_percentage: float
+        percentage of associated uav out of all connections
+        max_n: int
+        number of UEs which are served simultaneously by BS
+
+        Returns
+        -------
+        connection_complete: bool
+        indicates whether connection is complete or not
+        connections become complete when desidred UAVs and UEs are associated
+
+        connection_list: list
+        id list of connected UAVs or UEs
+        """
+
+        if len(self.connected_uav_id_list) > max_n:
+            np.random.shuffle(self.connected_uav_id_list)
+            self.connected_uav_id_list = self.connected_uav_id_list[:max_n]
+
+        if len(self.connected_g_ue_id_list) > max_n:
+            np.random.shuffle(self.connected_g_ue_id_list)
+            self.connected_g_ue_id_list = self.connected_g_ue_id_list[:max_n]
+
+        if len(self.connected_g_ue_id_list) == max_n and len(self.connected_uav_id_list) == max_n:
+            self.connected = True
+            connection_complete = True
+            uav_connection_list =[]
+            gUE_connection_list = []
+            for j in np.arange(max_n):
+                p   = np.random.uniform(0,1,1)
+                if p <= uav_percentage:
+                    uav_connection_list.append(self.connected_uav_id_list[j])
+                else:
+                    gUE_connection_list.append(self.connected_g_ue_id_list[j])
+            self.connected_g_ue_id_list = gUE_connection_list
+            self.connected_uav_id_list = uav_connection_list
+            connection_list = np.append(uav_connection_list, gUE_connection_list)
+        else:
+            self.connected = False
+            connection_list = np.array([])
+            connection_complete = False
+
+        self.connected_entities = connection_list
+        return connection_complete, connection_list
+
+    def decide_connection_bt_uav_ue(self, max_n=2):
+        # decide one from associated entities
+        """
+        Decide connection among UEs and UAVs
 
         Parameters
         ----------
@@ -194,34 +247,32 @@ class BS(object):
         connection_list: list
         id list of connected UAVs or UEs
         """
-        connection_list = np.append(self.connected_uav_id_list,self.connected_g_ue_id_list,)
-        if uav_access_bs_t is True:
-            if len(connection_list)>= max_n:
-                np.random.shuffle(connection_list)
-                connection_list = connection_list[:max_n]
-                connection_complete = True
-            else:
-                connection_list = np.array([])
-                connection_complete = False
-            self.connected_entities = connection_list
+
+        if len(self.connected_uav_id_list) > max_n:
+            np.random.shuffle(self.connected_uav_id_list)
+            self.connected_uav_id_list = self.connected_uav_id_list[:max_n]
+
+        if len(self.connected_g_ue_id_list) > max_n:
+            np.random.shuffle(self.connected_g_ue_id_list)
+            self.connected_g_ue_id_list = self.connected_g_ue_id_list[:max_n]
+        # if BS is terrestrial type
+        if self.bs_type ==1 and len(self.connected_g_ue_id_list) == max_n: 
+            self.connected = True
+            connection_complete = True
+            connection_list = self.connected_g_ue_id_list
+        # if BS is aerial type
+        elif self.bs_type ==0 and len(self.connected_uav_id_list) == max_n:
+            self.connected = True
+            connection_complete = True
+            connection_list = self.connected_uav_id_list
         else:
-            if self.bs_type == 1 and len(self.connected_g_ue_id_list) >= max_n:
-                np.random.shuffle(self.connected_g_ue_id_list)
-                connection_list = self.connected_g_ue_id_list[:max_n]
-                connection_complete = True
-            elif self.bs_type == 0 and len(self.connected_uav_id_list) >= max_n:
-                np.random.shuffle(self.connected_uav_id_list)
-                connection_list = self.connected_uav_id_list[:max_n]
-                connection_complete = True
-            else:
-                connection_list = np.array([])
-                connection_complete = False
+            self.connected = False
+            connection_list = np.array([])
+            connection_complete = False
 
-            self.connected_entities = connection_list
+        self.connected_entities = connection_list
 
-        return connection_complete, self.connected_entities
-
-
+        return connection_complete, connection_list
 
     def get_MMSE_beamform_vectors(self,connected_UE_list, snr_sum_rest_UEs):
         """
@@ -255,15 +306,14 @@ class BS(object):
             w_UE2 = ue2.get_bf()
             bs_sect_n = ue2.get_bs_sect_n()
             HW = self.H[(u_, bs_sect_n)].dot(w_UE2)
-            snr_ratio = self.SNR_u[(u_, bs_sect_n)] #/self.SNR_u[(u_, bs_sect_n)]
-            sum_cov += snr_ratio * (np.outer(HW, np.matrix.conjugate(HW))).real
+            snr_ratio = self.SNR_u[(u_, bs_sect_n)]  # /self.SNR_u[u]
+            sum_cov += snr_ratio * (np.outer(HW, np.matrix.conjugate(HW))).real #H.dot(np.matrix.conjugate(H.T))#
 
         for i, ue in enumerate(connected_UE_list):
             u = ue.get_id()
             bs_sect_n = ue.get_bs_sect_n()
             A_downlik = sum_cov + N_a*U*(1 + snr_sum_rest_UEs[bs_sect_n]) * np.eye(len(sum_cov))
             A = sum_cov + (1 + snr_sum_rest_UEs[bs_sect_n]) * np.eye(len(sum_cov))
-
             w_UE = ue.get_bf()
             w_BS = np.linalg.inv(A).dot(self.H[(u, bs_sect_n)]).dot(w_UE)
             w_BS_downlink = np.linalg.inv(A_downlik).dot(self.H[(u, bs_sect_n)]).dot(w_UE)
@@ -277,7 +327,7 @@ class BS(object):
                 w_mmse_list_downlink[u] = w_BS_downlink
         return w_mmse_list, w_mmse_list_downlink
 
-    def get_interference(self,total_UE_list:list =None, total_connected_ue_id_list:list = None):
+    def get_interference(self,total_UE_list =None, total_connected_ue_id_list = None):
         """
         Compute interference MU-MIMO uplink case by employing MMSE receiver at BS side
         1) decide the MMSE beamforming vector for the given connections
@@ -299,7 +349,7 @@ class BS(object):
         such as SNR, SINR, inter-cell and intral cell interferences
         """
         # decide connected UAVs and UEs in this BS
-        connected_id_list = self.connected_entities
+        connected_id_list = np.append(self.connected_uav_id_list, self.connected_g_ue_id_list)
         connected_id_list = np.array(connected_id_list, dtype = int)
         # decide the UAVs and UEs in the other cells
         rest_id_list = list(set(total_connected_ue_id_list) - set(connected_id_list))
@@ -308,11 +358,7 @@ class BS(object):
         rest_UE_list = total_UE_list[rest_id_list]
         connected_UE_list = total_UE_list[connected_id_list]
 
-        # compute SNR from serving cell and other cells for connected
-        total_connected_ue_id_list = np.array(total_connected_ue_id_list, dtype= int)
-        for ue in total_UE_list[total_connected_ue_id_list]:
-            ue.compute_snrs()
-
+        # compute the sum snr from UEs in other cells
         snr_sum_rest_UEs = np.zeros(3)
         for bs_sect_n in range(3):
             for r_ue in rest_UE_list:
@@ -321,14 +367,13 @@ class BS(object):
 
         if len(connected_id_list) !=0:
             # let's create a data structure
-            data =[{'SINR':None,'SNR':None, 'intra_itf':1e-20, 'inter_itf':1e-20,'bs_id':self.bs_id,'bs_type':None,
-                    'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None, 'ue_elem':None, 'bs_elem':None
+            data =[{'SINR':None,'SNR':None, 'intra_itf':1e-20, 'inter_itf':1e-20,'bs_id':self.bs_id,
+                    'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None, 'ue_x':None,'ue_y':None, 'ue_z':None,
+                    'bs_x':None, 'bs_y':None, 'bs_z':None, 'ue_elem':None, 'bs_elem':None
                     , 'itf_gUE':1e-20, 'itf_UAV':1e-20, 'link_state':None,'n_los':0, 'n_nlos':0,
                     'los_itf':1e-20, 'nlos_itf':1e-20 , 'itf_no_ptx_list':[], 'itf_id_list':[],
                     'bf_gain':None}
                    for i in range (len(connected_id_list))]
-            #'ue_x':None,'ue_y':None, 'ue_z':None, 'bs_x':None, 'bs_y':None, 'bs_z':None,
-
             # get mmse list for uplink and mmse precoder list for downlink
             w_mmse_list,self.w_mmse_precoder_list = self.get_MMSE_beamform_vectors(connected_UE_list, snr_sum_rest_UEs)
 
@@ -344,6 +389,7 @@ class BS(object):
                 rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u, bs_sect_ind)])
                 tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u, bs_sect_ind)])
 
+
                 if self.frequency == 2e9: # and ue.ground_UE is True:
                     g = np.conj(w_BS).dot(self.H[(u, bs_sect_ind)])
                     tx_rx_bf = abs(g*np.conj(g))
@@ -352,6 +398,7 @@ class BS(object):
                     g = np.conj(w_BS).dot(self.H[(u, bs_sect_ind)]).dot(w_UE)
                     tx_rx_bf = abs(g * np.conj(g))
                     l_f = tx_rx_bf * (pl_lin * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+
 
 
                 l_f_db = 10*np.log10(l_f.sum() + 1e-20)
@@ -363,12 +410,12 @@ class BS(object):
                 data[i]['bf_gain'] = 10*np.log10(tx_rx_bf)
 
                 serv_ue_loc = np.squeeze(ue.get_current_location())
-                #data[i]['ue_x'] = serv_ue_loc[0]
-                #data[i]['ue_y'] = serv_ue_loc[1]
-                #data[i]['ue_z'] = serv_ue_loc[2]
-                #data[i]['bs_x'] = self.locations[0][0]
-                #data[i]['bs_y'] = self.locations[0][1]
-                #data[i]['bs_z'] = self.locations[0][2]
+                data[i]['ue_x'] = serv_ue_loc[0]
+                data[i]['ue_y'] = serv_ue_loc[1]
+                data[i]['ue_z'] = serv_ue_loc[2]
+                data[i]['bs_x'] = self.locations[0][0]
+                data[i]['bs_y'] = self.locations[0][1]
+                data[i]['bs_z'] = self.locations[0][2]
                 data[i]['tx_power'] = ue.get_Tx_power()
                 data[i]['ue_elem'] = 10*np.log10(np.max(tx_elem_gain_lin_u)+ 1e-20)
                 data[i]['bs_elem'] = 10*np.log10(np.max(rx_elem_gain_lin_u) + 1e-20)
@@ -377,19 +424,15 @@ class BS(object):
                 else:
                     data[i]['ue_type'] = 'g_ue'
 
-                if self.bs_type ==1:
-                    data[i]['bs_type'] = 'bs_s'
-                else:
-                    data[i]['bs_type'] = 'bs_d'
+
             # compute intra-cell interference
             for i, ue in enumerate(connected_UE_list):
 
                 connected_UE_list2 = np.delete(connected_UE_list, i)
-
-                u = ue.get_id()
                 w_BS = w_mmse_list[u]
+                u = ue.get_id()
                 bs_sect_ind = ue.get_bs_sect_n()
-                #resource_id_connected = ue.get_resource_index()
+                resource_id_connected = ue.get_resource_index()
 
                 itf =0
                 itf_gUE = 0
@@ -399,8 +442,8 @@ class BS(object):
 
                 for ue2 in connected_UE_list2:
                     u2 = ue2.get_id()
-                    #resource_id_itf = ue2.get_resource_index()
-                    if self.link_state[u2] != 0.0 and u!=u2: #and resource_id_connected == resource_id_itf:
+                    resource_id_itf = ue2.get_resource_index()
+                    if self.link_state[u2] != 0.0 and resource_id_connected == resource_id_itf:
                         w_UE = ue2.get_bf()
                         pl_lin = 10 ** (-0.1 * self.pl[u2])
                         rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2, bs_sect_ind)])
@@ -432,16 +475,16 @@ class BS(object):
                                 los_itf += itf0
                     
 
-                data[i]['itf_gUE'] = itf_gUE
-                data[i]['itf_UAV'] = itf_UAV
-                data[i]['intra_itf'] = np.asscalar(10*np.log10(itf + 1e-25))
-                data[i]['n_los'] = n_los
-                data[i]['n_nlos'] = n_nlos
-                data[i]['los_itf'] = los_itf
-                data[i]['nlos_itf'] = nlos_itf
+                    data[i]['itf_gUE'] = itf_gUE
+                    data[i]['itf_UAV'] = itf_UAV
+                    data[i]['intra_itf'] = np.asscalar(10*np.log10(itf + 1e-25))
+                    data[i]['n_los'] = n_los
+                    data[i]['n_nlos'] = n_nlos
+                    data[i]['los_itf'] = los_itf
+                    data[i]['nlos_itf'] = nlos_itf
 
-            if data[i]['intra_itf'] == 1e-20: # in cases that there is no intra-interference
-                data[i]['intra_itf'] = -200
+                if data[i]['intra_itf'] == 1e-20: # in cases that there is no intra-interference
+                    data[i]['intra_itf'] = -200
             # compute inter-cell interference
             for i, ue in enumerate(connected_UE_list):
                 u = ue.get_id()
@@ -457,8 +500,8 @@ class BS(object):
 
                 for r_ue in rest_UE_list:
                     u2 = r_ue.get_id()
-                    #resource_id_itf = r_ue.get_resource_index()
-                    if self.link_state[u2] != 0.0: #and resource_id_connected == resource_id_itf:
+                    resource_id_itf = r_ue.get_resource_index()
+                    if self.link_state[u2] != 0.0 and resource_id_connected == resource_id_itf:
                         Ptx = r_ue.get_Tx_power()
                         P_t_lin = 10**(0.1*Ptx)
 

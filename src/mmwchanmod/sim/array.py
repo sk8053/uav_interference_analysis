@@ -33,7 +33,7 @@ class ArrayBase(object):
         self.fc = fc
         self.drone_antenna_gain = None#drone_antenna_gain()
 
-    def sv(self, phi:list, theta:list, include_elem:bool =True,
+    def sv(self, phi:list, theta:list,
            return_elem_gain:bool =False, drone:bool = False):
         """
         Gets the steering vectors for the array
@@ -43,8 +43,6 @@ class ArrayBase(object):
             azimuth angle in degrees
         theta : (n,) array
             elevation angle in degrees
-        include_elem : boolean
-            Indicate if the element pattern is to be included
         return_elem_gain : boolean, default=False
             Indicates if the element gain is to be returned
         drone: this indicates weather the array is in drone side or BS side
@@ -60,24 +58,24 @@ class ArrayBase(object):
             phi = np.array([phi])
         if np.isscalar(theta):
             theta = np.array([theta])
-        # if array is in the receiver side, the sign of local angels should be opposite
 
-        # Get unit vectors in the direction of the rays
-        # Note the conversion from elevation to inclination
-        u = sph_to_cart(1, phi, 90 - theta)
+        # return only spatial channels
+        if return_elem_gain is False:
+            # Get unit vectors in the direction of the rays
+            # Note the conversion from elevation to inclination
 
-        # Compute the delay along each path in wavelengths
-        lam = PhyConst.light_speed / self.fc
-        dly = u.dot(self.elem_pos.T) / lam
+            u = sph_to_cart(1, phi, 90 - theta)
 
-        # Phase rotation
-        usv = np.exp(-1j * 2 * np.pi * dly)
+            # Compute the delay along each path in wavelengths
+            lam = PhyConst.light_speed / self.fc
+            dly = u.dot(self.elem_pos.T) / lam
 
-        # Add element pattern if requested.
-        # Note the element gain is converted to linear scale
-
-        if include_elem:
-            if drone is True:
+            # Phase rotation
+            usv = np.exp(-1j * 2 * np.pi * dly)
+            return usv
+        # return only element gains
+        else:
+            if drone is True: # if it is drone
                 phi, theta = np.array(phi, dtype = int), np.array(theta, dtype = int)
                 phi[phi%2 !=0] +=1
                 theta[theta%2 !=0] +=1
@@ -96,21 +94,9 @@ class ArrayBase(object):
                 elem_gain = np.array(itemgetter(*keys)(self.drone_antenna_gain.gain))
                 if np.ndim(elem_gain)==0:
                     elem_gain = np.array([elem_gain])
-            else:
+            else: # if it is ground UE
                 elem_gain = self.elem.response(phi, theta)
-
-            elem_gain_lin = 10 ** (0.05 * elem_gain)
-
-            usv = usv * elem_gain_lin[:, None] #* np.exp (-1j*2*np.pi*dly*28e9)
-
-        else:
-            n = len(phi)
-            elem_gain = np.zeros(n)
-
-        if return_elem_gain:
-            return usv, elem_gain
-        else:
-            return usv
+            return elem_gain
 
     def conj_bf(self, phi, theta):
         """

@@ -83,10 +83,14 @@ print ('UAV height is ', uav_height)
 random.seed(100)
 ISD_s = 200
 
-uav_access_bs_t  = True
+uav_access_bs_t  = False
+if uav_access_bs_t is True:
+    print ('----------------- open access  ---------------')
+else:
+    print('----------------- close access  ---------------')
 enable_dl_itf = False # enabling downlink interference computation
-#print ('ISD between standard BSs is ,', ISD_s)
-#print ('ISD between dedicated BSs is ,', ISD_a)
+print ('ISD between standard BSs is ,', ISD_s)
+print ('ISD between dedicated BSs is ,', ISD_d)
 
 lam_s = 4/(np.pi*ISD_s**2)
 if ISD_d !=0:
@@ -96,8 +100,8 @@ else:
 
 XMAX, YMAX = 1000, 1000
 area = XMAX * YMAX
-print ('Average number of standard BSs is ', int(lam_s*area))
-print ('Average number of dedicated BSs is ', int(lam_d*area))
+#print ('Average number of standard BSs is ', int(lam_s*area))
+#print ('Average number of dedicated BSs is ', int(lam_d*area))
 min_distance = 10
 # set network we observe
 network = Network(X_MAX = XMAX, X_MIN = 0, Y_MAX = YMAX, Y_MIN = 0, Z_MAX = uav_height)
@@ -120,58 +124,56 @@ if frequency == 2e9:
 # number of ground UE = number of BS, and their locations are closer
 print ('number of ue per cell is, ', n_drop)
 for t in tqdm(range (run_time), desc= 'number of drops'):
-    n_bs_s = np.random.poisson(lam_s*area)
-    n_bs_d = np.random.poisson(lam_d *area)
-    #if n_bs_d ==0:
-    #    n_bs_d =1
+    n_bs_s = np.random.poisson(lam_s*area) # number of standard BSs
+    n_bs_d = np.random.poisson(lam_d *area) # number of dedicated BSs
+
     if uav_access_bs_t is True:
         n_total = n_bs_s *n_drop
         n_uav_dropped = int(uav_percentage * n_total)
         n_gue_droppped = n_total - n_uav_dropped
-        #n_uav_dropped +=  n_bs_d*n_drop
+        if n_uav_dropped == 0:
+            n_bs_d =0
     else:
         n_uav_dropped = n_drop*n_bs_d
         n_gue_droppped = n_drop * n_bs_s
 
     channel_info.N_UAV = n_uav_dropped
-
+    # locations of standard BSs
     bs_loc_s = get_location(n = n_bs_s, MAX = 1000, isBS = True, low = 2, high = 5)
-    if n_bs_d != 0:
-        bs_loc_d =get_location(n = n_bs_d, MAX = 1000, isBS = True, low = 10, high = 30)
-    
-    if n_bs_d !=0:
-        bs_loc = np.append(bs_loc_s, bs_loc_d, axis = 0)
-    else:
-        bs_loc = bs_loc_s
 
     if n_uav_dropped !=0:
-    # generate all UAV locations we will utilize to drop over simulation time
+      # generate all UAV locations we will utilize to drop over simulation time
       uav_loc = get_location(n = n_uav_dropped, MAX = 1000, isBS = False, h = uav_height)
-    # channel between UAV and standard BSs
+      # channel between UAV and standard BSs
       uav_channel_list_s, uav_link_state_s = get_channels(uav_loc, bs_loc_s,channel_info.aerial_channel, network,
                                                      frequency = frequency, cell_type = 1)
-    if n_bs_d !=0:
-        # channel between UAV and dedicated BSs
-        uav_channel_list_d, uav_link_state_d = get_channels(uav_loc, bs_loc_d, channel_info.aerial_channel, network,
-                                                            frequency=frequency, cell_type=0)
-
-        uav_channel_list = np.append(uav_channel_list_s, uav_channel_list_d, axis = 1)
-    elif n_uav_dropped !=0:
-        uav_channel_list = uav_channel_list_s
+    else:
+        print ('purely ground UEs are deployed')
 
     # set the locations of ground UEs
     g_ue_loc = get_location(n = n_gue_droppped, MAX = 1000, isBS = False, h = g_ue_height)
-    g_ue_loc = check_min_dist_UE_BS(bs_loc, g_ue_loc, n_gue_droppped)
-    
-    g_channel_list1 = get_channels(g_ue_loc, bs_loc_s, channel_info.ground_channel, network,
+    g_ue_loc = check_min_dist_UE_BS(bs_loc_s, g_ue_loc, n_gue_droppped)
+    g_channel_list_s = get_channels(g_ue_loc, bs_loc_s, channel_info.ground_channel, network,
                                   frequency = frequency, three_gpp = True, aerial_fading = False)
+
+    # if dedicated BSs are added
     if n_bs_d !=0:
-      g_channel_list2 = get_channels(g_ue_loc, bs_loc_d, channel_info.ground_channel, network,
-                                   frequency=frequency, three_gpp=True, aerial_fading=False)
-      #print (g_channel_list1.shape, g_channel_list2.shape)
-      g_channel_list = np.append(g_channel_list1, g_channel_list2, axis =1)
+        bs_loc_d = get_location(n=n_bs_d, MAX=1000, isBS=True, low=10, high=30)
+        bs_loc = np.append(bs_loc_s, bs_loc_d, axis = 0)
+        # channel between UAV and dedicated BSs
+        uav_channel_list_d, uav_link_state_d = get_channels(uav_loc, bs_loc_d, channel_info.aerial_channel, network,
+                                                            frequency=frequency, cell_type=0)
+        uav_channel_list = np.append(uav_channel_list_s, uav_channel_list_d, axis = 1)
+
+        g_channel_list_d = get_channels(g_ue_loc, bs_loc_d, channel_info.ground_channel, network,
+                                        frequency=frequency, three_gpp=True, aerial_fading=False)
+        g_channel_list = np.append(g_channel_list_s, g_channel_list_d, axis=1)
+    # if only standard BSs are deployed
     else:
-      g_channel_list = g_channel_list1
+        uav_channel_list = uav_channel_list_s
+        bs_loc = bs_loc_s
+        g_channel_list = g_channel_list_s
+
 
     bs_set = []
     # firstly drop terrestrial BSs
@@ -207,10 +209,13 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
     connected_bs_list = np.array([])
     for bs in bs_set:
         if bs.connected is True:
-            #connection_complete, connected_ue_id = bs.decide_connection_bt_uav_ue(max_n=max_n)
-            connection_complete, connected_ue_id = bs.decide_connection_multi_UE(max_n=max_n, uav_access_bs_t=uav_access_bs_t)
+            connection_complete, connected_ue_ids = bs.decide_connection_multi_UE(max_n=max_n, uav_access_bs_t=uav_access_bs_t)
             if connection_complete is True:
-                total_connected_ue_id_list = np.append(total_connected_ue_id_list, connected_ue_id)
+                # compute the channel only for connected UEs for saving time
+                for c_ue in total_ue_list[connected_ue_ids]:
+                    c_ue.compute_channels()
+
+                total_connected_ue_id_list = np.append(total_connected_ue_id_list, connected_ue_ids)
                 connected_bs_list = np.append(connected_bs_list, bs)
 
     UL_DATA = np.array([])

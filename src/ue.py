@@ -1,21 +1,19 @@
 import numpy as np
 import scipy.stats
 import scipy.constants
-import sys;
-sys.path.append('..')
 from mmwchanmod.sim.antenna import Elem3GPP
 from mmwchanmod.sim.array import URA, RotatedArray
-from mmwchanmod.sim.chanmod import dir_path_loss_multi_sect
+from mmwchanmod.sim.chanmod import MPChan, dir_path_loss_multi_sect
 from mmwchanmod.common.constants import LinkState
+from ground_channel_generation import GroundChannel
 
 
 class UE(object):
     """
     Class for implementing UAV
     """
-    def __init__(self, bs_info=None, network = None, channel_info = None, UE_id:int = 0,
-                 UAV_Height_max: int = 120, UAV_Height_min:int =10, ground_UE:bool = False
-                 , loc:list = [],  drone_antenna_gain = None, enable_3gpp_ch:bool = False):
+    def __init__(self, bs_info=None, network = None, channel_info = None, UE_id=0,UAV_Height_max = 120, UAV_Height_min =10, ground_UE = False
+                 , loc = [],  drone_antenna_gain = None, enable_3gpp_ch = False):
 
         self.UAV_Height_MAX = UAV_Height_max # UAV height max
         self.UAV_Height_MIN = UAV_Height_min # UAV height min
@@ -42,7 +40,7 @@ class UE(object):
         #self.pl_gain = np.zeros(len(bs_info))
         self.received_power = np.zeros(len(bs_info))
         # UE, BS beamforming vectors
-        self.ue_w_bf, self.bs_w_bf = list(), list()
+        self.ue_w_bf, self.bs_w_bf = dict(), dict()
         # UE and BS spatial signatures
         self.ue_sv, self.bs_sv = dict(), dict()
         # enable 3gpp channel
@@ -101,7 +99,7 @@ class UE(object):
     def get_array(self):
         return self.arr_ue_list
     def get_bf(self):
-        return self.ue_w_bf
+        return self.ue_w_bf[self.serving_bs_id]
     def get_ue_type(self):
         serv_ue_loc = np.squeeze(self.get_current_location())
         ue_height = serv_ue_loc[2]
@@ -118,10 +116,9 @@ class UE(object):
         self.resource_id = resource_id
 
 
-    def set_channel(self, chan_list=None, link_state = None):
+    def set_ground_user_channel(self, chan_list=None):
         # set ground user channels that obtained from ns3
         # we assume all ground users are static
-        '''
         if np.ndim(chan_list) ==0:
             ue_loc = np.repeat(self.get_current_location().reshape(-1,3), len(self.bs_locations), axis = 0)
             self.g_channel = GroundChannel(tx=self.bs_locations, rx=ue_loc)
@@ -129,9 +126,7 @@ class UE(object):
             self.g_chan_list = self.g_channel.getList(data)
         else:
             self.g_chan_list = list(chan_list)
-        '''
-        self.channels = chan_list
-        self.link_state = link_state
+
 
     def get_random_locations(self):
         """
@@ -156,67 +151,17 @@ class UE(object):
         else:
             self.loc = np.array(loc).reshape(-1,3)
 
-    def get_long_term_beamforming_vectors(self, ue_sv:list, bs_sv:list, n_rand:int = 10, uplink:bool = True):
-        '''
-        compute the long-term beamfomring vector based on channel information at BS and UE sides
-
-        Parameters
-        ----------
-        ue_sv: spatial signature at UE side
-        bs_sv: spatial signature at BS side
-        n_rand: number of iteration for small-scale fading randomization
-        uplink: determine if channel is uplink or downlink
-        Returns
-        -------
-        w_ue: list
-        beamforming vector at UE side
-        w_bs: list
-        beamforming vector at BS side
-
-        '''
-        n_r, n_t, n_path = ue_sv.shape[1], bs_sv.shape[1], ue_sv.shape[0]
-
-        Cov_H_bs, Cov_H_ue = np.zeros((n_rand, n_t, n_t), dtype=complex), np.zeros((n_rand, n_r, n_r), dtype=complex)
-        H_list = np.zeros((n_rand, n_r, n_t), dtype=complex)
-
-        H_frob = np.zeros((n_rand,))
-        # n_bs, n_ue = bs_sv.shape[1], ue_sv.shape[1]
-        for i in range(n_rand):
-            theta_random = np.random.uniform(low=-np.pi, high=np.pi, size=(ue_sv.shape[0],))
-            ue_sv2 = ue_sv * np.exp(-1j * theta_random[:, None])
-            if uplink is True:
-                H = ue_sv2.T.dot(np.conj(bs_sv))  # H(f)
-            else:
-                H = np.conj(ue_sv2).T.dot(bs_sv)  # H(f)
-            # H *=np.sqrt(n_tx*n_rx)/np.linalg.norm(H,'fro') # normalize H
-            H_frob[i] = np.linalg.norm(H, ord='fro') ** 2
-            H_list[i] = H
-            Cov_H_bs[i] = np.matrix.conj(H).T.dot(H)
-            Cov_H_ue[i] = H.dot(np.matrix.conj(H).T)
-
-        Cov_H_ue = np.mean(Cov_H_ue, axis=0)  # 16*16 Qrx
-        Cov_H_bs = np.mean(Cov_H_bs, axis=0)  # 64*64 Qtx
-
-        eig_value_ue, eig_vector_ue = np.linalg.eig(Cov_H_ue)
-        w_ue = eig_vector_ue[:, np.argmax(eig_value_ue)]  # 16*1
-        #w_ue = w_ue / np.linalg.norm(w_ue)
-
-        eig_value_bs, eig_vector_bs = np.linalg.eig(Cov_H_bs)
-        w_bs = eig_vector_bs[:, np.argmax(eig_value_bs)]  # 64*1
-        #w_bs = w_bs / np.linalg.norm(w_bs)
-        return w_ue, w_bs
-
-    def association (self, uav_access_bs_t:bool = True):
+    def association (self):
         '''
         1) compute channels between UEs (or UAVs) and BSs
         2) save all the data related to channel information
         3) perform association based on the received power from BSs
         4) choose optimal one BS and its sector as serving BS and sector
+        5) convey to BSs pathloss gain including beamforming and element gains caused by side lobe
 
         Parameters
         ----------
-        uav_access_bs_t: bool
-        enable UAVs to access to terrestrial BSs
+        None
         Returns
         -------
         None
@@ -227,89 +172,30 @@ class UE(object):
         # first, get channels for all BSs
         loc = self.loc.reshape(1,3)
         dist_vectors = loc - self.bs_locations
-        #dist_vectors = self.wrap_around(dist_vectors)
+        dist_vectors = self.wrap_around(dist_vectors)
+
+        if self.ground_UE is False:
+            if self.enable_3gpp_ch is False:
+                self.channels, link_states = self.channel_info.channel.sample_path(dist_vectors, self.cell_types)
+
+            else:
+                self.channels = self.g_chan_list
+        else:
+            self.channels = self.g_chan_list
 
         dist3D = np.linalg.norm(dist_vectors, axis = 1)
         bs_sect_ind_dict = dict()
         # then compute path loss, channel matrices, and beamforming vectors for all links
         for bs_id, channel in enumerate(self.channels):
 
-            data = dir_path_loss_multi_sect(self.arr_gnb_list[bs_id], self.arr_ue_list, channel,
-                                            isdrone=not self.ground_UE,
-                                            return_elem_gain= True)
-
-            fspl = 20 * np.log10(dist3D[bs_id]) + 20 * np.log10(self.frequency) - 147.55
-            channel.pl[channel.pl < fspl] = fspl
-
+            data = dir_path_loss_multi_sect(self.arr_gnb_list[bs_id], self.arr_ue_list, channel, dist3D[bs_id],
+                                            long_term_bf=self.channel_info.long_term_bf,
+                                            isdrone=not self.ground_UE, frequency=self.frequency)
             if len(channel.pl) ==0: # outage case
                 channel.pl = np.array([250])
                 #self.pl_gain[bs_id] = np.zeros((1,))  # path gain = path loss + bf gain + elem gain
                 self.bs_elem_gain[bs_id] = {i:np.array([-250]) for i in range(3)}
                 self.ue_elem_gain[bs_id] = {i:np.array([-250]) for i in range(3)}
-                self.received_power[bs_id] = -np.inf
-                bs_sect_ind = 0
-            else:
-                # for every UE, make maps from BS ID to channel parameters
-                self.bs_elem_gain[bs_id] = data['ue_elem_gain_dict']
-                self.ue_elem_gain[bs_id] = data['bs_elem_gain_dict']
-
-                bs_sect_ind = data['sect_ind']
-                received_power_db = self.channel_info.BS_TX_power - channel.pl  + self.bs_elem_gain[bs_id][bs_sect_ind] \
-                                    + self.ue_elem_gain[bs_id][bs_sect_ind]
-                received_power_lin = 10**(0.1*received_power_db)
-                self.received_power[bs_id] = 10*np.log10(received_power_lin.sum())
-
-            # map from bs id to sector id for one UE
-            bs_sect_ind_dict[bs_id] = bs_sect_ind
-
-        # Do association
-        # find serving BSs having maximum received power
-        if self.ground_UE is True: # UEs can only be connected with standard BSs
-            max_power = np.max(self.received_power[self.cell_types==1])
-        # UAV can connect with either standard BSs and rooftop BSs
-        elif self.ground_UE is False and len(self.cell_types) !=0:
-            if uav_access_bs_t is True:
-                max_power = np.max(self.received_power) # [self.cell_types == 0]
-            else: # in this case, UAV can only access to dedicated BSs.
-                max_power = np.max(self.received_power[self.cell_types == 0])
-        else:
-            raise RuntimeError('UAVs are trying to connects to dedicated BSs, but there is no dedicated BS ')
-
-
-        serv_bs_id = np.where(self.received_power == max_power)[0][0]
-
-
-        if self.channels[serv_bs_id].link_state != LinkState.no_link:
-
-            self.bs_set[serv_bs_id].connect_ue(self.ue_id, self.received_power[serv_bs_id], self.get_ue_type())
-            self.serving_bs_sect_ind = bs_sect_ind_dict[serv_bs_id]
-            self.serving_bs_id = serv_bs_id
-            # convey index of serving sector of BS to serving BS
-            self.bs_set[serv_bs_id].set_serv_bs_sect(n = self.serving_bs_sect_ind)
-
-            # power control
-            # compute Tx power of UE according to simple power control algorithm according to the formula given to 3GPP
-            if self.channel_info.ptrl is True:
-                P_ex = (self.channels[serv_bs_id].pl - self.bs_elem_gain[serv_bs_id][self.serving_bs_sect_ind]
-                                - self.ue_elem_gain[serv_bs_id][self.serving_bs_sect_ind]) * self.alpha + self.P0
-                P_ex = 10*np.log10(np.sum(10**(0.01*P_ex)))
-                self.tx_power = min(P_ex, self.channel_info.UE_TX_power)
-            else:
-                self.tx_power = 23
-
-    def compute_channels(self):
-        '''
-        compute channel between UE and BS
-         '''
-        if len(self.loc) == 0:
-            self.loc = self.get_random_locations()
-
-        # then compute path loss, channel matrices, and beamforming vectors for all links
-        for bs_id, channel in enumerate(self.channels):
-            data = dir_path_loss_multi_sect(self.arr_gnb_list[bs_id], self.arr_ue_list, channel,
-                                            isdrone=not self.ground_UE,
-                                            return_elem_gain=False)
-            if channel.link_state == LinkState.no_link: # outage case
                 if self.frequency == 2e9: # and self.ground_UE is True:
                     N_ue = 1
                     N_bs = 8
@@ -319,68 +205,95 @@ class UE(object):
                 else:
                     N_ue = 16
                     N_bs = 64
+                self.ue_w_bf[bs_id] = np.zeros((N_ue,))  # wrx without element gain
+                self.bs_w_bf[bs_id] = np.zeros((N_bs,))  # wtx without element gain
                 self.ue_sv[bs_id] = {i:np.zeros((1, N_ue)) for i in range(3)}  # rx_sv without element gain
                 self.bs_sv[bs_id] = {i:np.zeros((1, N_bs)) for i in range(3)}  # tx_sv without element gain
+
                 data['ue_sv_dict'] = self.ue_sv[bs_id]
                 data['bs_sv_dict'] = self.bs_sv[bs_id]
+
+                self.received_power[bs_id] = -np.inf
+                bs_sect_ind = 0
             else:
                 # for every UE, make maps from BS ID to channel parameters
                 self.ue_sv[bs_id] = data['ue_sv_dict'] # rx_sv without element gain
                 self.bs_sv[bs_id] = data['bs_sv_dict'] # tx_sv without element gain
-            # BSs have to have the channel information
-            data['ue_elem_gain_dict'] = self.ue_elem_gain[bs_id]
-            data['bs_elem_gain_dict'] = self.bs_elem_gain[bs_id]
+                self.bs_elem_gain[bs_id] = data['ue_elem_gain_dict']
+                self.ue_elem_gain[bs_id] = data['bs_elem_gain_dict']
+
+                self.ue_w_bf[bs_id] = data['w_ue'] # wrx without element gain
+                self.bs_w_bf[bs_id] = data['w_bs'] # wtx without element gain
+                bs_sect_ind = data['sect_ind']
+
+                received_power_db = self.channel_info.BS_TX_power - channel.pl  + self.bs_elem_gain[bs_id][bs_sect_ind] \
+                                    + self.ue_elem_gain[bs_id][bs_sect_ind]
+                received_power_lin = 10**(0.1*received_power_db)
+
+                self.received_power[bs_id] = 10*np.log10(received_power_lin.sum())
+
+            # map from bs id to sector id for one UE
+            bs_sect_ind_dict[bs_id] = bs_sect_ind
+            # BSs have to store the channel information
             self.bs_set[bs_id].set_channels(ue_id=self.ue_id, link_state=channel.link_state, pl=channel.pl, data=data)
 
-        # calculate the long-term beamforming vectors
-        self.ue_w_bf, self.bs_w_bf = self.get_long_term_beamforming_vectors \
-                    (ue_sv = self.ue_sv[self.serving_bs_id][self.serving_bs_sect_ind],
-                     bs_sv = self.bs_sv[self.serving_bs_id][self.serving_bs_sect_ind])
+        # Do association
+        # find serving BSs having maximum received power
+        if self.ground_UE is True:
+            max_power = np.max(self.received_power[self.cell_types==1])
+        elif np.sum(self.cell_types == 0) != 0:
+            max_power = np.max(self.received_power[self.cell_types == 0])
+        else:
+            max_power = np.max(self.received_power)
+        serv_bs_id = np.where(self.received_power == max_power)[0][0]
 
-    def compute_snrs(self):
-        '''
-        Compute SNR between UE and all the BSs including its serving BS
+        self.serving_bs_id = serv_bs_id
+        self.bs_set[serv_bs_id].connect_ue(self.ue_id, self.received_power[serv_bs_id], self.get_ue_type())
+        self.serving_bs_sect_ind = bs_sect_ind_dict[serv_bs_id]
 
-        Parameters
-        ----------
-        None
+        # convey index of serving sector of BS to serving BS
+        self.bs_set[serv_bs_id].set_serv_bs_sect(n = self.serving_bs_sect_ind)
 
-        Returns
-        -------
-        None
-        '''
-        serv_bs_id = self.serving_bs_id
-        for bs_id in range(len(self.channels)):
+        # compute Tx power of UE according to simple power control algorithm according to the formula given to 3GPP
+        if self.channel_info.ptrl is True:
+            P_ex = (self.channels[serv_bs_id].pl - self.bs_elem_gain[serv_bs_id][self.serving_bs_sect_ind]
+                            - self.ue_elem_gain[serv_bs_id][self.serving_bs_sect_ind]) * self.alpha + self.P0
+            P_ex = 10*np.log10(np.sum(10**(0.01*P_ex)))
+            self.tx_power = min(P_ex, self.channel_info.UE_TX_power)
+        else:
+            self.tx_power = 23
+
+
+        for bs_id  in range (len(self.channels)):
             for bs_sect_ind in range(3):
-                if self.channels[bs_id].pl[0] != 250:  # if not outage
+                if self.channels[bs_id].pl[0] != 250: # if not outage
 
-                    ue_sv_s = self.ue_sv[bs_id][bs_sect_ind]  # .T,
-                    ue_w_bf = self.ue_w_bf
+                    ue_sv_s = self.ue_sv[bs_id][bs_sect_ind] #.T,
+                    ue_w_bf = self.ue_w_bf[serv_bs_id]
 
-                    bf_gain_UE_side_lobe = 10 * np.log10(np.abs(ue_sv_s.dot(ue_w_bf)) ** 2 + 1e-20)
+                    bf_gain_UE_side_lobe =  10*np.log10(np.abs(ue_sv_s.dot(ue_w_bf))**2 + 1e-20)
 
-                    pl_gain_no_BS_after_assocition = self.channels[bs_id].pl - bf_gain_UE_side_lobe - \
-                                                     self.ue_elem_gain[bs_id][bs_sect_ind] \
+                    pl_gain_no_BS_after_assocition = self.channels[bs_id].pl - bf_gain_UE_side_lobe - self.ue_elem_gain[bs_id][bs_sect_ind] \
                                                      - self.bs_elem_gain[bs_id][bs_sect_ind]
-                    pl_lin_no_BS = 10 ** (-0.1 * (pl_gain_no_BS_after_assocition))
-                    pl_gain_no_BS_dB = -10 * np.log10(pl_lin_no_BS.sum())
-                else:  # outage case
-                    pl_gain_no_BS_dB = 250
+
+                    pl_lin_no_BS = 10**(-0.1*(pl_gain_no_BS_after_assocition))
+                    pl_gain_no_BS_after_assocition = 10*np.log10(pl_lin_no_BS.sum())
+
+                else: # outage case
+                    pl_gain_no_BS_after_assocition = 250
                 # if bs is not serving BS
                 if bs_id != serv_bs_id:
                     serv_ue = False
-                    self.bs_set[bs_id].set_snr_by_sidelobe(ue_tx_power=self.tx_power,
-                                                           ue_id=self.ue_id,
-                                                           pl_gain_no_BS_after_association=pl_gain_no_BS_dB,
-                                                           sect_n=bs_sect_ind, serv_ue=serv_ue)
+                    self.bs_set[bs_id].set_snr_by_sidelobe(ue_id=self.ue_id,
+                                                         pl_gain_no_BS_after_association=pl_gain_no_BS_after_assocition,
+                                                         sect_n=bs_sect_ind, serv_ue=serv_ue)
 
                 # if bs is serving BS and its sector is serving sector
                 elif bs_id == serv_bs_id and bs_sect_ind == self.serving_bs_sect_ind:
                     serv_ue = True
-                    self.bs_set[bs_id].set_snr_by_sidelobe(ue_tx_power=self.tx_power,
-                                                           ue_id=self.ue_id,
-                                                           pl_gain_no_BS_after_association=pl_gain_no_BS_dB,
-                                                           sect_n=bs_sect_ind, serv_ue=serv_ue)
+                    self.bs_set[bs_id].set_snr_by_sidelobe(ue_id=self.ue_id,
+                                                         pl_gain_no_BS_after_association=pl_gain_no_BS_after_assocition,
+                                                         sect_n=bs_sect_ind, serv_ue=serv_ue)
 
     def get_interference(self, connected_BS = None):
         '''
@@ -401,13 +314,12 @@ class UE(object):
         '''
         inter_itf, intra_itf = 0,0
         serv_bs_id = self.serving_bs_id # serving BS ID
-
         serv_tx_rx_bf = 0
         #serv_sec_id = self.serving_bs_sect_ind
         # do not consider outage case
         if self.channels[serv_bs_id].link_state != LinkState.no_link:
             # take the beamforming vector toward serving BS at UE side
-            w_ue = self.ue_w_bf
+            w_ue = self.ue_w_bf[serv_bs_id]
             # consider all the associated BSs
             for bs in connected_BS:
                 bs_id = bs.get_id()
@@ -537,7 +449,7 @@ class UE(object):
         dist_vectors = self.wrap_around(dist_vectors)
 
         cell_types = np.repeat([1], len(dist_vectors))
-
+        #print (dist_vectors, cell_types)
         channels, link_states = self.channel_info.channel.sample_path(dist_vectors, cell_types)
         dist3D = np.linalg.norm(dist_vectors, axis=1)
         # then compute path loss, channel matrices, and beamforming vectors for all links
@@ -578,7 +490,7 @@ class UE(object):
         # do not consider outage case
         serv_bs_id = self.serving_bs_id
         # take the beamforming vector toward serving BS at UE side
-        w_ue = self.ue_w_bf
+        w_ue = self.ue_w_bf[serv_bs_id]
         # consider all the associated BSs
         itf = 0
         for uav in connected_uavs:

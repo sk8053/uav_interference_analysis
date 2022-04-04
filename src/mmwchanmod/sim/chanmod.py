@@ -3,7 +3,7 @@ chanmod.py:  Methods for modeling multi-path channels
 """
 
 import numpy as np
-import numexpr as ne
+#import numexpr as ne
 import copy
 from mmwchanmod.common.constants import LinkState
 
@@ -158,8 +158,9 @@ def dir_path_loss(tx_arr, rx_arr, chan, return_elem_gain=True,\
             out.append(rx_bf)
         return out
 
-def dir_path_loss_multi_sect(bs_arr_list, ue_arr_list, chan, distance3D,
-                             long_term_bf = True, isdrone = False, frequency = 28e9):
+def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan, distance3D:float,
+                             long_term_bf:bool = True, isdrone:bool = False, frequency:int = 28e9,
+                             uplink = True):
     """
     Computes the directional path loss between list of RX and TX arrays.
     This is typically used when the TX or RX have multiple sectors
@@ -220,7 +221,7 @@ def dir_path_loss_multi_sect(bs_arr_list, ue_arr_list, chan, distance3D,
                 ue_svi, ue_elem_gaini = ue_arr.sv(aoa_phi, aoa_theta
                                                 ,return_elem_gain=True, drone = isdrone) #, drone = True
 
-                fspl = 20*np.log10(distance3D) + 20*np.log10(28e9) - 147.55
+                fspl = 20*np.log10(distance3D) + 20*np.log10(frequency) - 147.55
                 chan.pl[chan.pl<fspl] = fspl
                 # Compute path loss with element gains
                 pl_elemi = chan.pl - bs_elem_gaini - ue_elem_gaini
@@ -261,7 +262,10 @@ def dir_path_loss_multi_sect(bs_arr_list, ue_arr_list, chan, distance3D,
             for i in range (n_rand):
                 theta_random = np.random.uniform(low=-np.pi, high=np.pi, size=(ue_sv.shape[0],))
                 ue_sv2 = ue_sv*np.exp(-1j*theta_random[:,None])
-                H = np.matrix.conj(ue_sv2).T.dot(bs_sv2)# H(f)
+                if uplink is True:
+                    H = ue_sv2.T.dot(np.conj(bs_sv2))# H(f)
+                else:
+                    H = np.conj(ue_sv2).T.dot(bs_sv2)  # H(f)
 
                 H_rx = ue_sv2
                 H_tx = bs_sv2

@@ -12,7 +12,7 @@ class ArrayBase(object):
     Base class for an antenna array
     """
 
-    def __init__(self, elem=None, fc=28e9, elem_pos=np.array([[0, 0, 0]])):
+    def __init__(self, elem=None, fc:float =28e9, elem_pos:list =np.array([[0, 0, 0]])):
         """
         Constructor
         Parameters
@@ -33,7 +33,8 @@ class ArrayBase(object):
         self.fc = fc
         self.drone_antenna_gain = None#drone_antenna_gain()
 
-    def sv(self, phi, theta, include_elem=True, return_elem_gain=False, drone = False):
+    def sv(self, phi:list, theta:list, include_elem:bool =True,
+           return_elem_gain:bool =False, drone:bool = False):
         """
         Gets the steering vectors for the array
         Parameters
@@ -209,7 +210,7 @@ class RotatedArray(ArrayBase):
     A rotated array.
     """
 
-    def __init__(self, arr, phi0=0, theta0=0,drone = False,  **kwargs):
+    def __init__(self, arr:list, phi0:float =0, theta0:float =0,drone = False,  **kwargs):
         """
         Constructor
         Parameters
@@ -304,7 +305,7 @@ class RotatedArray(ArrayBase):
         return w
 
 
-def multi_sect_array(arr0, sect_type='azimuth', theta0=0, phi0=0., nsect=3):
+def multi_sect_array(arr0:list, sect_type:str ='azimuth', theta0:float=0, phi0:float=0., nsect:int =3):
     """
     Creates a list of arrays for multi-sector.
     For sect_type == 'azimuth', the arrays are placed

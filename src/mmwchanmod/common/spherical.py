@@ -64,7 +64,7 @@ def sph_to_cart(r, phi, theta):
     return d
 
 
-def spherical_add_sub(phi0, theta0, phi1, theta1, sub=True):
+def spherical_add_sub(phi0, theta0, phi1, theta1, sub:bool=True):
     """
     Angular addition and subtraction in spherical coordinates
 

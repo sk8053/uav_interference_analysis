@@ -10,12 +10,12 @@ class BS(object):
     """
     def __del__(self):
         pass
-    def __init__(self, bs_type: int = 1, bs_id: int = 0, network = None, channel_info = None, loc: list =[]):
+    def __init__(self, bs_type: int = 1, bs_id: int = 0, network = None, channel_info = None, loc: list =[], n_sect:int= 3):
         # 1 is terrestrial, 0 is aerial
         # half power beamwidth for horizontal and vertical axis
         thetabw, phibw = 65, 65
         # number of sectors
-        n_sect = 3
+        self.n_sect = n_sect
         # range of BS heights
         self.Tr_BS_Height_MIN = 5
         self.Tr_BS_Height_MAX = 8
@@ -35,7 +35,8 @@ class BS(object):
         self.connected = False
         # obtain total number of UAVs
         self.N_UAV = channel_info.N_UAV
-
+        # total number of connected UEs
+        self.total_ue_n = 0
         # set all antenna arrays
         # firstly set antenna elements for terrestrial and aerial BSs
         elem_gnb_t = Elem3GPP(thetabw=thetabw, phibw=phibw)
@@ -55,12 +56,14 @@ class BS(object):
             self.N_a = 64
         # sectorize the antenna arrays for BSs,
         # BSs are equipped with multiple sectors
-        arr_gnb_list_a = multi_sect_array(arr_gnb_a, sect_type='azimuth', nsect=n_sect, theta0=45)
-        arr_gnb_list_t = multi_sect_array(arr_gnb_t, sect_type='azimuth', nsect=n_sect, theta0=-12)
+
+
 
         if bs_type == 1: # 1 is terrestrial BS, 0 is aerial BS
+            arr_gnb_list_t = multi_sect_array(arr_gnb_t, sect_type='azimuth', nsect=self.n_sect, theta0=-12)
             self.arr_gnb_list = arr_gnb_list_t
         else:
+            arr_gnb_list_a = multi_sect_array(arr_gnb_a, sect_type='azimuth', nsect=self.n_sect, theta0=45)
             self.arr_gnb_list = arr_gnb_list_a
 
 
@@ -84,7 +87,7 @@ class BS(object):
         self.pl = dict()
         # connected UAVs and UEs
         self.connected_entities = None
-        self.serving_sect_ind = 0 # index of serving sector at BS
+        self.serving_sect_ind = dict() # index of serving sector at BS
 
     def set_locations(self,loc = np.array([])):
         # set locations for BSs
@@ -144,16 +147,13 @@ class BS(object):
         data: dictionary
         this includes all the information related to channel
 
-        Returns
-        -------
-        None
         """
-        for i in range(3):
+        for i in range(self.n_sect):
             self.elem_gain_UE[(ue_id, i)] = data['ue_elem_gain_dict'][i] # element gain at UE side
             self.elem_gain_BS[(ue_id, i)] = data['bs_elem_gain_dict'][i]
             self.bs_sv[(ue_id, i)] = data['bs_sv_dict'][i].T
             self.ue_sv[(ue_id, i)] = data['ue_sv_dict'][i].T
-
+            # channel from UE to BS
             self.H[(ue_id, i)] = self.bs_sv[(ue_id,i)].dot(np.matrix.conj(self.ue_sv[(ue_id, i)]).T)
             N_r, N_t = self.H[(ue_id, i)].shape
             H_fro_norm = np.linalg.norm(self.H[(ue_id,i)], 'fro')
@@ -194,7 +194,8 @@ class BS(object):
         connection_list: list
         id list of connected UAVs or UEs
         """
-        connection_list = np.append(self.connected_uav_id_list,self.connected_g_ue_id_list,)
+        connection_list = np.append(self.connected_uav_id_list,self.connected_g_ue_id_list)
+        self.total_ue_n = len(connection_list)
         if uav_access_bs_t is True:
             if len(connection_list)>= max_n:
                 np.random.shuffle(connection_list)
@@ -244,7 +245,7 @@ class BS(object):
         w_mmse_list_downlink: list
         list of mmse beamforing vectors corresponding to each connected UE or UAV for downlink case
         """
-        sum_cov = 0
+        sum_cov, sum_cov_dl = 0,0
 
         N_a = self.N_a
         U =  len(self.connected_entities)
@@ -253,20 +254,24 @@ class BS(object):
         for ue2 in connected_UE_list:
             u_ = ue2.get_id()
             w_UE2 = ue2.get_bf()
+            w_UE2_dl = ue2.get_bf_dl()
             bs_sect_n = ue2.get_bs_sect_n()
             HW = self.H[(u_, bs_sect_n)].dot(w_UE2)
+            HW_dl = self.H[(u_, bs_sect_n)].dot(w_UE2_dl)
             snr_ratio = self.SNR_u[(u_, bs_sect_n)] #/self.SNR_u[(u_, bs_sect_n)]
             sum_cov += snr_ratio * (np.outer(HW, np.matrix.conjugate(HW))).real
+            sum_cov_dl += snr_ratio * ( np.outer(HW_dl,np.matrix.conjugate(HW_dl))).real
 
         for i, ue in enumerate(connected_UE_list):
             u = ue.get_id()
             bs_sect_n = ue.get_bs_sect_n()
-            A_downlik = sum_cov + N_a*U*(1 + snr_sum_rest_UEs[bs_sect_n]) * np.eye(len(sum_cov))
+            A_downlik = sum_cov_dl + N_a*U*(1 + snr_sum_rest_UEs[bs_sect_n]) * np.eye(len(sum_cov_dl))
             A = sum_cov + (1 + snr_sum_rest_UEs[bs_sect_n]) * np.eye(len(sum_cov))
 
             w_UE = ue.get_bf()
+            w_UE_dl = ue.get_bf_dl()
             w_BS = np.linalg.inv(A).dot(self.H[(u, bs_sect_n)]).dot(w_UE)
-            w_BS_downlink = np.linalg.inv(A_downlik).dot(self.H[(u, bs_sect_n)]).dot(w_UE)
+            w_BS_downlink = np.linalg.inv(A_downlik).dot(self.H[(u, bs_sect_n)]).dot(w_UE_dl)
             if np.linalg.norm (w_BS) == 0:
                 w_BS = w_BS / (np.linalg.norm(w_BS)+1e-20)
                 w_BS_downlink = w_BS_downlink / (np.linalg.norm(w_BS_downlink) + 1e-20)
@@ -274,7 +279,7 @@ class BS(object):
                 w_BS = w_BS / np.linalg.norm(w_BS)  # norm is computed even if values are complex numbers
                 w_BS_downlink  = w_BS_downlink/np.linalg.norm(w_BS_downlink)
                 w_mmse_list[u] = w_BS
-                w_mmse_list_downlink[u] = w_BS_downlink
+                w_mmse_list_downlink[u] = w_BS_downlink #np.matrix.conj(w_BS_downlink)
         return w_mmse_list, w_mmse_list_downlink
 
     def get_interference(self,total_UE_list:list =None, total_connected_ue_id_list:list = None):
@@ -308,13 +313,9 @@ class BS(object):
         rest_UE_list = total_UE_list[rest_id_list]
         connected_UE_list = total_UE_list[connected_id_list]
 
-        # compute SNR from serving cell and other cells for connected
-        total_connected_ue_id_list = np.array(total_connected_ue_id_list, dtype= int)
-        for ue in total_UE_list[total_connected_ue_id_list]:
-            ue.compute_snrs()
 
-        snr_sum_rest_UEs = np.zeros(3)
-        for bs_sect_n in range(3):
+        snr_sum_rest_UEs = np.zeros(self.n_sect)
+        for bs_sect_n in range(self.n_sect):
             for r_ue in rest_UE_list:
                 r_ue_id = r_ue.get_id()
                 snr_sum_rest_UEs[bs_sect_n] += self.SNR_u_from_itf[(r_ue_id, bs_sect_n)]
@@ -325,7 +326,7 @@ class BS(object):
                     'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None, 'ue_elem':None, 'bs_elem':None
                     , 'itf_gUE':1e-20, 'itf_UAV':1e-20, 'link_state':None,'n_los':0, 'n_nlos':0,
                     'los_itf':1e-20, 'nlos_itf':1e-20 , 'itf_no_ptx_list':[], 'itf_id_list':[],
-                    'bf_gain':None}
+                    'bf_gain':None, 'n_t':0}
                    for i in range (len(connected_id_list))]
             #'ue_x':None,'ue_y':None, 'ue_z':None, 'bs_x':None, 'bs_y':None, 'bs_z':None,
 
@@ -346,7 +347,7 @@ class BS(object):
 
                 if self.frequency == 2e9: # and ue.ground_UE is True:
                     g = np.conj(w_BS).dot(self.H[(u, bs_sect_ind)])
-                    tx_rx_bf = abs(g*np.conj(g))
+                    tx_rx_bf = abs(g*np.conj(g))[0]
                     l_f =  tx_rx_bf*(pl_lin* rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
                 else:
                     g = np.conj(w_BS).dot(self.H[(u, bs_sect_ind)]).dot(w_UE)
@@ -361,7 +362,7 @@ class BS(object):
                 data[i]['link_state'] = self.link_state[u]
                 data[i]['l_f'] = l_f_db
                 data[i]['bf_gain'] = 10*np.log10(tx_rx_bf)
-
+                data[i]['n_t'] = self.total_ue_n
                 serv_ue_loc = np.squeeze(ue.get_current_location())
                 #data[i]['ue_x'] = serv_ue_loc[0]
                 #data[i]['ue_y'] = serv_ue_loc[1]
@@ -447,13 +448,12 @@ class BS(object):
                 u = ue.get_id()
                 w_BS = w_mmse_list[u]
                 bs_sect_ind = ue.get_bs_sect_n()
-                itf =0
-                itf_gUE = 0
-                itf_UAV = 0
+
+                itf, itf_UAV, itf_gUE =0, 0, 0
                 n_los, n_nlos = 0, 0
                 los_itf, nlos_itf = 0, 0
 
-                resource_id_connected = ue.get_resource_index()
+                #resource_id_connected = ue.get_resource_index()
 
                 for r_ue in rest_UE_list:
                     u2 = r_ue.get_id()
@@ -522,8 +522,10 @@ class BS(object):
         return self.w_mmse_precoder_list[ue_id]
     def get_connected_ue_list(self):
         return np.array(self.connected_entities, dtype = int)
-    def set_serv_bs_sect(self, n=0):
-        self.serving_sect_ind = n
-    def get_serv_bs_sect(self):
-        return self.serving_sect_ind
+    def set_serv_bs_sect(self, ue_id, n=0):
+        self.serving_sect_ind[ue_id] = n
+    def get_serv_bs_sect(self, ue_id):
+        return self.serving_sect_ind[ue_id]
+    def get_number_of_sectors(self):
+        return self.n_sect
 

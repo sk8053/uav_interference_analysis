@@ -191,10 +191,14 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan,
     if chan.link_state == LinkState.no_link:
         #sect_ind_ue = 0
         sect_ind_bs = 0
+        zero_array_bs = np.zeros(shape =(1, len(bs_arr_list)))
+        zero_array_ue = np.zeros(shape=(1, len(ue_arr_list)))
+
         zero_array = np.array([0])
         #w_bs, w_ue = zero_array, zero_array
-        bs_elem_gain_dict, ue_elem_gain_dict = {i:zero_array for i in range(3)}, {i:zero_array for i in range(3)}
-        bs_sv_dict, ue_sv_dict = {i:zero_array for i in range(3)}, {i:zero_array for i in range(3)}
+        n_sect = len(bs_arr_list)
+        bs_elem_gain_dict, ue_elem_gain_dict = {i:zero_array for i in range(n_sect)}, {i:zero_array for i in range(n_sect)}
+        bs_sv_dict, ue_sv_dict = {i:zero_array_bs for i in range(n_sect)}, {i:zero_array_ue for i in range(n_sect)}
     else:
         #im = 0
         #sect_ind_ue = 0
@@ -211,6 +215,7 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan,
         pl_min = MPChan.large_pl
         bs_elem_gain_dict, ue_elem_gain_dict = dict(), dict()
         bs_sv_dict, ue_sv_dict = dict(), dict()
+
         for i_ue, ue_arr in enumerate(ue_arr_list):
             for i_bs, bs_arr in enumerate(bs_arr_list):
                 # this is up-link case: arrival angles at BSs
@@ -249,7 +254,7 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan,
                'ue_elem_gain_dict':ue_elem_gain_dict,
                'sect_ind': sect_ind_bs
               }
-    else: # it it returns spatial channels only
+    else: # if it returns spatial channels only
       out ={
           'bs_sv_dict':bs_sv_dict,
           'ue_sv_dict':ue_sv_dict,

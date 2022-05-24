@@ -9,9 +9,8 @@ class drone_antenna_gain():
         #p = np.loadtxt(ab_path+'azi_ele_angles.txt')
         #v = np.loadtxt(ab_path+'values.txt')
         #az, ele = p.T
-
         df = np.loadtxt(ab_path + 'drone_antenna_pattern_real_.csv')
-        ele, az = df[:,0], df[:,1]
+        ele, az = df[:,0]-90, df[:,1]-180
         v = df[:,2]
 
         az, ele = np.array(az.T, dtype = int), np.array(ele.T, dtype = int)

@@ -30,13 +30,13 @@ parser.add_argument('--t_gpp', dest = 't_gpp', action = 'store_true')
 
 parser.add_argument('--ptrl', dest = 'ptrl', action = 'store_true')
 
-parser.add_argument('--n_UAV',action='store',default=8,type= int,\
+parser.add_argument('--n_UAV',action='store',default=5,type= int,\
     help='number of UAVs considered for association')
 
-parser.add_argument('--n_gUE',action='store',default=8,type= int,\
+parser.add_argument('--n_gUE',action='store',default=5,type= int,\
     help='number of ground UEs considered for association')
 
-parser.add_argument('--run_time',action='store',default=50,type= int,\
+parser.add_argument('--run_time',action='store',default=30,type= int,\
     help='simulation running time')
 
 parser.add_argument('--frequency',action='store',default=28e9,type= float,\
@@ -44,7 +44,7 @@ parser.add_argument('--frequency',action='store',default=28e9,type= float,\
 parser.add_argument('--alpha',action='store',default=0.8,type= float,\
     help='alpha for power control')
 
-parser.add_argument('--P0',action='store',default=-50,type= float,\
+parser.add_argument('--P0',action='store',default=-82,type= float,\
     help='reference power for power control')
 
 parser.add_argument('--ISD_d',action='store',default=200,type= int,\
@@ -63,6 +63,7 @@ P0 = args.P0
 frequency = args.frequency
 ptrl = args.ptrl
 enable_3gpp_ch = args.t_gpp
+
 max_n = args.n
 ISD_d = args.ISD_d
 
@@ -72,7 +73,6 @@ uav_percentage = (n_UAV)/(n_gUE+ n_UAV)
 
 print ('uav percentage is %2.3f' %(int(uav_percentage*100)))
 print ('number of connections to BS is ', max_n)
-print ('frequency is ', frequency)
 print ('alpha is %s and P0 is %s'% (alpha, P0))
 
 n_drop = args.n_drop
@@ -83,12 +83,14 @@ print ('UAV height is ', uav_height)
 random.seed(100)
 ISD_s = 200
 
-uav_access_bs_t  = False
+uav_access_bs_t  = True
+enable_dl_itf = False # enabling downlink interference computation
+
 if uav_access_bs_t is True:
     print ('----------------- open access  ---------------')
 else:
     print('----------------- close access  ---------------')
-enable_dl_itf = False # enabling downlink interference computation
+
 print ('ISD between standard BSs is ,', ISD_s)
 print ('ISD between dedicated BSs is ,', ISD_d)
 
@@ -107,19 +109,24 @@ min_distance = 10
 network = Network(X_MAX = XMAX, X_MIN = 0, Y_MAX = YMAX, Y_MIN = 0, Z_MAX = uav_height)
 # channel information
 
-print ('Aerial channel for 3GPP is, ', enable_3gpp_ch)
-channel_info = Channel_Info(city = 'uav_boston')
+print ('3 Gpp Aerial channel is, ', enable_3gpp_ch)
+channel_info = Channel_Info(city = 'uav_moscow')
 channel_info.alpha = alpha
 channel_info.P0 = P0
 channel_info.ptrl = ptrl
-channel_info.long_term_bf = True
+#channel_info.long_term_bf = True
 channel_info.frequency = frequency
 
 drone_antenna_gain = drone_antenna_gain()
 print ('power control is', ptrl)
-if frequency == 2e9:
-    channel_info.BW = 80e6
 
+if enable_3gpp_ch is True:
+    uav_channel_model = channel_info.ground_channel
+    channel_info.BW = 80e6
+else:
+    uav_channel_model = channel_info.aerial_channel
+
+print ('frequency is ', frequency)
 # every drop we set different number of BSs and their locations
 # number of ground UE = number of BS, and their locations are closer
 print ('number of ue per cell is, ', n_drop)
@@ -136,17 +143,18 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
     else:
         n_uav_dropped = n_drop*n_bs_d
         n_gue_droppped = n_drop * n_bs_s
-
+   # print (n_uav_dropped)
     channel_info.N_UAV = n_uav_dropped
     # locations of standard BSs
-    bs_loc_s = get_location(n = n_bs_s, MAX = 1000, isBS = True, low = 2, high = 5)
+    bs_loc_s = get_location(n = n_bs_s, MAX = 1000, isBS = True, low = 10, high = 10.1)
 
     if n_uav_dropped !=0:
       # generate all UAV locations we will utilize to drop over simulation time
       uav_loc = get_location(n = n_uav_dropped, MAX = 1000, isBS = False, h = uav_height)
       # channel between UAV and standard BSs
-      uav_channel_list_s, uav_link_state_s = get_channels(uav_loc, bs_loc_s,channel_info.aerial_channel, network,
-                                                     frequency = frequency, cell_type = 1)
+      uav_channel_list_s = get_channels(uav_loc, bs_loc_s,channel_info.aerial_channel, network,
+                                                     frequency = frequency, cell_type = 1,
+                                                    three_gpp = False )
     else:
         print ('purely ground UEs are deployed')
 
@@ -161,20 +169,20 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
         bs_loc_d = get_location(n=n_bs_d, MAX=1000, isBS=True, low=10, high=30)
         bs_loc = np.append(bs_loc_s, bs_loc_d, axis = 0)
         # channel between UAV and dedicated BSs
-        uav_channel_list_d, uav_link_state_d = get_channels(uav_loc, bs_loc_d, channel_info.aerial_channel, network,
-                                                            frequency=frequency, cell_type=0)
+        uav_channel_list_d = get_channels(uav_loc, bs_loc_d, channel_info.aerial_channel, network,
+                                                            frequency=frequency, cell_type=0,
+                                                            three_gpp = False, aerial_fading = True)
         uav_channel_list = np.append(uav_channel_list_s, uav_channel_list_d, axis = 1)
 
         g_channel_list_d = get_channels(g_ue_loc, bs_loc_d, channel_info.ground_channel, network,
-                                        frequency=frequency, three_gpp=True, aerial_fading=False)
+                                        frequency=frequency, three_gpp=True)
         g_channel_list = np.append(g_channel_list_s, g_channel_list_d, axis=1)
     # if only standard BSs are deployed
     else:
-        uav_channel_list = uav_channel_list_s
+        if n_uav_dropped !=0:
+            uav_channel_list = uav_channel_list_s
         bs_loc = bs_loc_s
         g_channel_list = g_channel_list_s
-
-
     bs_set = []
     # firstly drop terrestrial BSs
     for a in range(n_bs_s):
@@ -190,7 +198,7 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
     uav_list = []
     for k in np.arange(n_uav_dropped):
         uav = UE(channel_info=channel_info, network=network, UE_id=k, ground_UE=False, loc=uav_loc[k], bs_info=bs_set,
-                 drone_antenna_gain = drone_antenna_gain, enable_3gpp_ch = enable_3gpp_ch)
+                 drone_antenna_gain = drone_antenna_gain)
         uav.set_channel(chan_list=uav_channel_list[k])
         uav.association(uav_access_bs_t= uav_access_bs_t)
         uav_list.append(uav)
@@ -214,7 +222,7 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
                 # compute the channel only for connected UEs for saving time
                 for c_ue in total_ue_list[connected_ue_ids]:
                     c_ue.compute_channels()
-
+                
                 total_connected_ue_id_list = np.append(total_connected_ue_id_list, connected_ue_ids)
                 connected_bs_list = np.append(connected_bs_list, bs)
 
@@ -224,6 +232,7 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
         UL_DATA = np.append(UL_DATA, data)
 
     # collect all data and save from only UAVs
+
     if ptrl is True:
         if uav_access_bs_t is True:
             path_ul = ab_path + '/uav_interference_analysis/test_data/%d_stream_ptrl/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_%dG_%d.txt' % \
@@ -252,9 +261,9 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
             else:
                 itf_ue_uav = -200
 
-                data = ue.get_interference(connected_BS = connected_bs_list)
-                data['itf_ue_uav'] = itf_ue_uav
-                DL_DATA = np.append(DL_DATA, data)
+            data = ue.get_interference(connected_BS = connected_bs_list)
+            data['itf_ue_uav'] = itf_ue_uav
+            DL_DATA = np.append(DL_DATA, data)
 
         path_dl = ab_path + '/uav_interference_analysis/test_data/%d_stream_ptrl/downlink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_%dG_%d.txt' % \
                       (max_n, n_UAV,  ISD_d,  max_n, uav_height,  int(frequency / 1e9), t)

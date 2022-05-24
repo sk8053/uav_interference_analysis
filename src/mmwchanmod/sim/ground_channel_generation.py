@@ -30,13 +30,14 @@ class GroundChannel():
         os.system('rm location.txt')
         os.chdir(ab_path + '/uav_interference_analysis/')
 
-    def getList(self, a):
+    def getList(self, a, get_link_state = False):
         data = dict()
         data_list = list()
         chan_list = list()
         chan = MPChan()
         tx_loc = list()
         rx_loc = list()
+        link_state_list = list()
         while True:
             line = a.readline()
             line = line.split()
@@ -65,6 +66,7 @@ class GroundChannel():
                 chan.ang[:, MPChan.aoa_theta_ind] = data_s
             if line[0] == 'link_state':
                 chan.link_state = data_s[0]
+                link_state_list.append(int(chan.link_state))
             if line[0] == 'aoa':
                 data_list.append(data)
                 data = dict()
@@ -75,5 +77,7 @@ class GroundChannel():
                 tx_loc.append(data[line[0]])
             if line[0] == 'RX':
                 rx_loc.append(data[line[0]])
-
-        return chan_list
+        if get_link_state is True:
+            return chan_list, link_state_list
+        else:
+            return chan_list

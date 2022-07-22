@@ -45,7 +45,7 @@ def get_df(dir_=None, n = 1, f= 28, uplink = True):
 
     #df_uav = df[df['ue_type'] == 'uav']
 
-    #df = df[df['ue_type']=='g_ue']
+    df = df[df['ue_type']=='g_ue']
 
     noise_power_dB = 10*np.log10(BW) + KT+NF
     noise_power_lin = KT_lin * NF_lin * BW
@@ -80,6 +80,7 @@ def get_df(dir_=None, n = 1, f= 28, uplink = True):
 
         inter_itf_lin = 10 ** (0.1 * inter_itf)
         itf_ue_uav_lin = 10**(0.1*itf_ue_uav)
+        total_itf_dB = 10*np.log10(intra_itf_lin + inter_itf_lin)
         total_itf_lin = intra_itf_lin + inter_itf_lin + itf_ue_uav_lin
         noise_and_itf_dB = 10 * np.log10(noise_power_lin + total_itf_lin)
 
@@ -93,24 +94,25 @@ def get_df(dir_=None, n = 1, f= 28, uplink = True):
     median_SNR = np.sort(SNR)[med_ind]
     print (dir_[-10:], median_SINR, median_SNR)
     INR = 10*np.log10(total_itf_lin) - noise_power_dB
-    return  np.array(SINR), SNR, INR #df['itf_ue_uav']-noise_power_dB
+    return  np.array(SINR),total_itf_dB-noise_power_dB , df['itf_ue_uav']-noise_power_dB
 
 
-dir_1 = 'test_data/2_stream_ptrl/UAV_50'
+#dir_1 = 'test_data/2_stream_ptrl/UAV_50'
 #dir_2 = 'test_data_dl/2_stream_ptrl/UAV_50'
 
 dir_2 = 'test_data/dedicated_1_1_ptrl/'
 
 
 
-df1_sinr, df1_snr, df1_inr = get_df(dir_ = dir_1, n = 2)
+#df1_sinr, df1_snr, df1_inr = get_df(dir_ = dir_1, n = 2)
 df2_sinr,df2_snr, df2_inr= get_df(dir_ = dir_2, n= 1 , uplink= False)
 
 fig, ax = plt.subplots(figsize = (8,6))
 lines =[]
 if True:
-    lines += ax.plot(np.sort(df1_inr), np.linspace(0,1,len(df1_sinr)),'b', label = 'uplink', lw = 2)
-    lines += ax.plot(np.sort(df2_inr), np.linspace(0,1,len(df2_sinr)),'g', label = 'downlink', lw = 2)
+
+    lines += ax.plot(np.sort(df2_snr), np.linspace(0, 1, len(df2_snr)), 'g-.', label='interference between gUEs', lw=2)
+    lines += ax.plot(np.sort(df2_inr), np.linspace(0,1,len(df2_inr)),'r-.', label = 'interference from UAVs', lw = 2)
 
 
 if False:
@@ -129,7 +131,8 @@ plt.yticks(fontsize = 16)
 
 #plt.xlabel('SINR and SNR (dB)', fontsize = 16)
 #plt.xlabel (r' SINR and SNR Threshold T (dB), N$_s$ = %d'% n_s, fontsize = 16)
-plt.xlabel (r' SINR and SNR, N$_s$ = %d'% n_s, fontsize = 16)
+#plt.xlabel (r' SINR and SNR, N$_s$ = %d'% n_s, fontsize = 16)
+plt.xlabel ('INR (dB)', fontsize = 16)
 
 #plt.xlim([-20,42])
 #plt.ylabel('Probability of Coverage, P', fontsize = 16)

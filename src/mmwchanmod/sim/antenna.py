@@ -295,7 +295,7 @@ class Elem3GPP(ElemBase):
 
         #print (min(phi), max(phi))
         # plot_pattern(self.response,100,0,0,100,'rect_phi')
-        #print (phi[0], theta[0])
+
         if self.thetabw > 0:
             Av = -np.minimum(12 * ((theta1) / self.thetabw) ** 2, self.slav)
         else:

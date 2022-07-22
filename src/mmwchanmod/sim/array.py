@@ -13,6 +13,7 @@ class ArrayBase(object):
     """
 
     def __init__(self, elem=None, fc:float =28e9, elem_pos:list =np.array([[0, 0, 0]])):
+
         """
         Constructor
         Parameters
@@ -35,6 +36,7 @@ class ArrayBase(object):
 
     def sv(self, phi:list, theta:list,
            return_elem_gain:bool =False, drone:bool = False):
+
         """
         Gets the steering vectors for the array
         Parameters
@@ -71,7 +73,7 @@ class ArrayBase(object):
             dly = u.dot(self.elem_pos.T) / lam
 
             # Phase rotation
-            usv = np.exp(-1j * 2 * np.pi * dly)
+            usv = np.exp(1j * 2 * np.pi * dly)
             return usv
         # return only element gains
         else:
@@ -95,6 +97,7 @@ class ArrayBase(object):
                 if np.ndim(elem_gain)==0:
                     elem_gain = np.array([elem_gain])
             else: # if it is ground UE
+
                 elem_gain = self.elem.response(phi, theta)
             return elem_gain
 

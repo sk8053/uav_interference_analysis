@@ -8,8 +8,10 @@
 #python3 itf_mmse.py --n_gUE 5 --n_UAV 3 --n 2 --n_drop 200 --height 60 --run_time 30 --ptrl
 #python3 itf_mmse.py --uav_p 0.5  --n 2 --n_drop 100 --height 60 --run_time 30 --ptrl
 
-python3 itf_mmse_dedicated_BS.py  --n 1 --n_drop 200 --height 60 --run_time 50 --ptrl
-python3 itf_mmse.py --uav_p 0.5  --n 2 --n_drop 200 --height 60 --run_time 50 --ptrl
+python3 itf_codebook_dedicated_BS.py --ISD_d 0 --ptrl
+python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl
+#python3 itf_mmse_dedicated_BS.py  --n 1 --n_drop 200 --height 60 --run_time 50 --ptrl
+#python3 itf_mmse.py --uav_p 0.5  --n 2 --n_drop 200 --height 60 --run_time 50 --ptrl
 
 #python3 itf_mmse_dedicated_BS.py  --n 2 --n_drop 400 --height 60 --run_time 30 --ptrl
 #python3 itf_mmse.py --uav_p 0.5  --n 4 --n_drop 400 --height 60 --run_time 30 --ptrl

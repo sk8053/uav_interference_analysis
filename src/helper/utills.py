@@ -11,7 +11,7 @@ sys.path.append(ab_path+'/uav_interference_analysis/')
 
 
 def get_channels(ue_loc, bs_loc,channel_model, network, three_gpp=False, frequency = 28e9, cell_type = 1,
-                 aerial_fading = False, get_link_state = False):
+                 aerial_fading = False, get_link_state = False, max_multi_n = 25):
     n_UE = len(ue_loc)
     if three_gpp is True:
         ue_loc2 = np.repeat(ue_loc[None, :], len(bs_loc), axis=0).reshape(-1, 3)
@@ -22,6 +22,7 @@ def get_channels(ue_loc, bs_loc,channel_model, network, three_gpp=False, frequen
         data = open(channel_model.path + 'ray_tracing.txt', 'r')
         three_gpp_channel_list, link_state_list = channel_model.getList(data, get_link_state = True)
         channel_list = np.array(three_gpp_channel_list).reshape(n_UE, -1)
+
 
     else:
         ue_loc2 = np.repeat(ue_loc, len(bs_loc), axis =0)

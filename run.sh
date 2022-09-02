@@ -1,3 +1,4 @@
+python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl --n_UAV 0 --n_drop 10 --n 1 --height 120 --run_time 100
 python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl --n_UAV 5 --n_drop 10 --n 1 --height 120
 python3 itf_mmse_dedicated_BS.py --ISD_d 0  --n_UAV 5 --n_drop 10 --n 1 --height 120
 python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl --n_UAV 0 --n_drop 10 --n 1 --height 120

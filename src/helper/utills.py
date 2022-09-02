@@ -63,7 +63,7 @@ def check_min_dist(loc):
     k =I[0]
     for i in I[1:]:
         dist = np.linalg.norm(loc[i] - loc[k])
-        if dist <20:
+        if dist <10:
             np.delete(loc, i, axis= 0)
         k = i
     return loc
@@ -87,7 +87,7 @@ def get_location(n:int = 50, MAX: int = 1000, isBS: bool = False, low:int =2, hi
 def check_min_dist_UE_BS(bs_loc, g_UE_loc, n):
 
     n_gUE_dropped = n
-    min_distance = 50
+    min_distance = 10
     # check minimum distance between ground UE and BS
     dist_vec = bs_loc - g_UE_loc[:,None]
     distance = np.linalg.norm(dist_vec[:,:2], axis = -1)
@@ -98,7 +98,7 @@ def check_min_dist_UE_BS(bs_loc, g_UE_loc, n):
         if min < min_distance:
             theta = np.random.uniform(low = - np.pi, high=np.pi, size = 1)
             #d_h = bs_loc[arg,2]-g_UE_loc[j,2]
-            r_2d = 50 #np.sqrt(min_distance**2 - d_h**2)
+            r_2d = 10 #np.sqrt(min_distance**2 - d_h**2)
             # change the location of a UE so that the distance is more than minimum
             g_UE_loc[j, 0] =  r_2d*np.cos(theta) + 0.05
             g_UE_loc[j, 1] =  r_2d*np.sin(theta) + 0.05

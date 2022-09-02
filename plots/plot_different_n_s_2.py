@@ -120,33 +120,36 @@ plt.setp(ax.get_xticklabels(), fontsize=18)
 plt.setp(ax.get_yticklabels(), fontsize=18)
 
 feature = 'SINR'
-inr1, _ = get_df(dir_=dir_1, n_s=1, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 1')
-inr2, _ = get_df(dir_=dir_2, n_s=2, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 2')
-inr3, _ = get_df(dir_=dir_3, n_s=3, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 3')
-inr4, _ = get_df(dir_=dir_4, n_s=4, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 4')
-
-
-feature = 'capacity'
 sinr1, _ = get_df(dir_=dir_1, n_s=1, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 1')
 sinr2, _ = get_df(dir_=dir_2, n_s=2, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 2')
 sinr3, _ = get_df(dir_=dir_3, n_s=3, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 3')
 sinr4, _ = get_df(dir_=dir_4, n_s=4, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 4')
 
+
+feature = 'capacity'
+rate1, _ = get_df(dir_=dir_1, n_s=1, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 1')
+rate2, _ = get_df(dir_=dir_2, n_s=2, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 2')
+rate3, _ = get_df(dir_=dir_3, n_s=3, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 3')
+rate4, _ = get_df(dir_=dir_4, n_s=4, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 4')
+
 colors_ = ['r','g','b','k']
 lt_ = ['--',':',  '-.','-']
 
-for i, (sinr, case) in enumerate(zip([sinr1, sinr2, sinr3, sinr4], [r'N$_{\rm u}$ = 1', r'N$_u$ = 2', r'N$_u$ = 3', r'N$_u$ = 4'])):
-    ax.plot(np.sort(sinr), np.linspace(0, 1, len(sinr)), label= case ,
+for i, (rate, case) in enumerate(zip([rate1, rate2, rate3, rate4], [r'N$_{\rm u}$ = 1', r'N$_u$ = 2', r'N$_u$ = 3', r'N$_u$ = 4'])):
+    ax.plot(np.sort(rate), np.linspace(0, 1, len(rate)), label= case ,
                  color=colors_[i], linestyle= lt_[i], linewidth=2.5)
+    np.savetxt('UAV_rate_Nu=%d'%(i+1), rate)
 
 
 #ax2 = ax.twiny()
 ax2 = fig.add_subplot(111, label = '2', frame_on = False)
 
 
-for i, (sinr, case) in enumerate(zip([inr1, inr2, inr3, inr4], [r'N$_{\rm u}$ = 1', r'N$_{\rm u}$ = 2', r'N$_{\rm u}$ = 3', r'N$_{\rm u}$ = 4'])):
+for i, (sinr, case) in enumerate(zip([sinr1, sinr2, sinr3, sinr4], [r'N$_{\rm u}$ = 1', r'N$_{\rm u}$ = 2', r'N$_{\rm u}$ = 3', r'N$_{\rm u}$ = 4'])):
     ax2.plot(np.flip(np.sort(sinr)), np.linspace(0, 1, len(sinr)), label= case ,
                  color=colors_[i], linestyle= lt_[i], linewidth=2.5)
+    np.savetxt('UAV_SINR_Nu=%d'%(i+1), rate)
+
 
 if uav is True:
 

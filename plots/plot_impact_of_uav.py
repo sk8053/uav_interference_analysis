@@ -21,6 +21,13 @@ parser.add_argument('--h', action='store', default=60, type=int, \
 #    help='frequency')
 
 plt.rcParams["font.family"] = "Times New Roman"
+#plt.rcParams["font.family"] = "serif"
+#plt.rcParams["font.serif"] = ["Times New Roman"]
+
+#from matplotlib import rcParams
+#rcParams['font.family'] = 'sans-serif'
+#rcParams['font.sans-serif'] = ['Tahoma']
+
 args = parser.parse_args()
 n_iter = args.n
 freq = 28e9
@@ -48,13 +55,13 @@ def get_df(dir_=None, isd_d=200, n_uav=5, n_s=1, uav=False, n_t=10, feature='SIN
 
     for t in range(n_iter):
         if zero_tilted is True:
-            data = pd.read_csv('../%s/full_power_zero_tilted_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
+            data = pd.read_csv('/%s/full_power_zero_tilted_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
                 dir_, n_uav, isd_d, n_s, height, t), delimiter='\t')
         elif full_power is True:
-            data = pd.read_csv('../%s/full_power_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
+            data = pd.read_csv('/%s/full_power_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
                 dir_, n_uav, isd_d, n_s, height, t), delimiter='\t')
         else:
-            data = pd.read_csv('../%s/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
+            data = pd.read_csv('/%s/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
             dir_, n_uav, isd_d, n_s, height, t), delimiter='\t')
         df = pd.concat([df, data])
 
@@ -93,7 +100,8 @@ def get_df(dir_=None, isd_d=200, n_uav=5, n_s=1, uav=False, n_t=10, feature='SIN
 
     colors_ = {'case 1': 'r', 'case 2': 'g', 'case 3':'b', 'case 4':'k'}
     lt_ = {'case 1': '-', 'case 2': '-.', 'case 3':':', 'case 4':'--'}
-
+    #np.savetxt(label_+'_SINR.txt', SINR)
+    #np.savetxt(label_+'_INR.txt', INR)
     #if uav is True:
     #    ax.plot(np.sort(v_dict[feature]), np.linspace(0, 1, len(SINR)), label=  label_,
     #             color=colors_[label_], linestyle=lt_[label_]
@@ -109,18 +117,15 @@ def get_df(dir_=None, isd_d=200, n_uav=5, n_s=1, uav=False, n_t=10, feature='SIN
 
 n_s = 1
 uav = False
-closed = False
 
-if closed is True:
-    dir_1 = 'test_data_closed/%d_stream_ptrl' % n_s
-    dir_2 = 'test_data_closed/%d_stream_ptrl' % (n_s + 1)
-    dir_3 = 'test_data_closed/%d_stream_ptrl' % (n_s + 2)
-    dir_4 = 'test_data_closed/%d_stream_ptrl' % (n_s + 3)
-else:
-    dir_1 = 'test_data/%d_stream_ptrl' % n_s
-    dir_2 = 'test_data/%d_stream_ptrl' % (n_s + 1)
-    dir_3 = 'test_data/%d_stream_ptrl' % (n_s + 2)
-    dir_4 = 'test_data/%d_stream_ptrl' % (n_s + 3)
+
+
+
+#dir_1 = 'home/seongjoonkang/backup/test_data/%d_stream_ptrl' % n_s
+dir_1 = 'home/seongjoonkang/uav_interference_analysis/test_data/%d_stream_ptrl'%n_s
+#dir_2 = 'test_data/%d_stream_ptrl' % (n_s + 1)
+#dir_3 = 'test_data/%d_stream_ptrl' % (n_s + 2)
+#dir_4 = 'test_data/%d_stream_ptrl' % (n_s + 3)
 
 fig = plt.figure()
 ax = fig.add_subplot(111, label = '1')
@@ -133,19 +138,19 @@ feature = 'INR'
 inr1, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 0, label_ = 'case 1')
 inr2, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 2')
 inr3, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 3', full_power= True)
-inr4, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 4' , zero_tilted=True)
+#inr4, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 4' , zero_tilted=True)
 
 
 feature = 'SINR'
 sinr1, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 0, label_ = 'case 1')
 sinr2, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 2')
 sinr3, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 3', full_power= True)
-sinr4, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 4' , zero_tilted=True)
+#sinr4, _ = get_df(dir_=dir_1, n_s=n_s, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = 'case 4' , zero_tilted=True)
 
 colors_ = {'config 1': 'r', 'config 2': 'g', 'config 3': 'b', 'case 4': 'k'}
 lt_ = {'config 1': '-', 'config 2': '-.', 'config 3': ':', 'case 4': '--'}
 
-for sinr, case in zip([sinr1, sinr2, sinr3], ['config 1', 'config 2', 'config 3']):
+for sinr, case in zip([sinr1, sinr2,  sinr3], ['config 1','config 2',  'config 3']):
     ax.plot(np.sort(sinr), np.linspace(0, 1, len(sinr)), label= case ,
                  color=colors_[case], linestyle= lt_[case], linewidth=2.5)
 ax.set_xlabel ('SINR', fontsize = 18)
@@ -156,7 +161,7 @@ ax2 = fig.add_subplot(111, label = '2', frame_on = False)
 
 ax2.set_xlabel ('INR', fontsize = 18)
 
-for sinr, case in zip([inr1, inr2, inr3], ['config 1', 'config 2', 'config 3']):
+for sinr, case in zip([inr1,inr2,  inr3], ['config 1','config 2',  'config 3']):
     ax2.plot(np.flip(np.sort(sinr)), np.linspace(0, 1, len(sinr)), label= case ,
                  color=colors_[case], linestyle= lt_[case], linewidth=2.5)
 

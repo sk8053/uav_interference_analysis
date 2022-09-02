@@ -146,7 +146,7 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
    # print (n_uav_dropped)
     channel_info.N_UAV = n_uav_dropped
     # locations of standard BSs
-    bs_loc_s = get_location(n = n_bs_s, MAX = 1000, isBS = True, low = 10, high = 10.1)
+    bs_loc_s = get_location(n = n_bs_s, MAX = 1000, isBS = True, low = 10, high = 10.5)
 
     if n_uav_dropped !=0:
       # generate all UAV locations we will utilize to drop over simulation time
@@ -242,10 +242,10 @@ for t in tqdm(range (run_time), desc= 'number of drops'):
                       (max_n, n_UAV, ISD_d, max_n, uav_height, int(frequency / 1e9), t)
     else:
         if uav_access_bs_t is True:
-            path_ul = ab_path + '/uav_interference_analysis/test_data/%d_stream/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_%dG_%d.txt' % \
+            path_ul = ab_path + '/uav_interference_analysis/test_data/%d_stream_ptrl/full_power_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_%dG_%d.txt' % \
                     (max_n, n_UAV, ISD_d, max_n, uav_height, int(frequency / 1e9), t)
         else:
-            path_ul = ab_path + '/uav_interference_analysis/test_data_closed/%d_stream/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_%dG_%d.txt' % \
+            path_ul = ab_path + '/uav_interference_analysis/test_data_closed/%d_stream_ptrl/full_power_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_%dG_%d.txt' % \
                       (max_n, n_UAV, ISD_d, max_n, uav_height, int(frequency / 1e9), t)
 
     save_file(UL_DATA, path_ul)

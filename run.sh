@@ -1,3 +1,6 @@
+python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl --n_UAV 5 --n_drop 10 --n 1 --height 120
+python3 itf_mmse_dedicated_BS.py --ISD_d 0  --n_UAV 5 --n_drop 10 --n 1 --height 120
+python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl --n_UAV 0 --n_drop 10 --n 1 --height 120
 
 #python3 itf_mmse.py --run_time 30 --height 60 --n_drop 200 --n_gUE 8 --n_UAV 0 --n 2 --ptrl --frequency 28e9
 #python3 itf_mmse.py --run_time 30 --height 60 --n_drop 200 --n_gUE 8 --n_UAV 0 --n 2  --frequency 28e9
@@ -8,8 +11,8 @@
 #python3 itf_mmse.py --n_gUE 5 --n_UAV 3 --n 2 --n_drop 200 --height 60 --run_time 30 --ptrl
 #python3 itf_mmse.py --uav_p 0.5  --n 2 --n_drop 100 --height 60 --run_time 30 --ptrl
 
-python3 itf_codebook_dedicated_BS.py --ISD_d 0 --ptrl
-python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl
+#python3 itf_codebook_dedicated_BS.py --ISD_d 0 --ptrl
+#python3 itf_mmse_dedicated_BS.py --ISD_d 0 --ptrl
 #python3 itf_mmse_dedicated_BS.py  --n 1 --n_drop 200 --height 60 --run_time 50 --ptrl
 #python3 itf_mmse.py --uav_p 0.5  --n 2 --n_drop 200 --height 60 --run_time 50 --ptrl
 

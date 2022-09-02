@@ -73,7 +73,7 @@ class BS(object):
         self.connected_uav_id_list = np.array([], dtype = int)
         self.connected_rx_power_list = np.array([])
         self.H = dict()
-        self.H_first = dict()
+        #self.H_first = dict()
         self.SNR_u = dict()
         self.SNR_u_from_itf = dict()
 
@@ -153,18 +153,18 @@ class BS(object):
 
             elem_gain_UE_lin = 10**(0.05*self.elem_gain_UE[(ue_id, i)])
             elem_gain_BS_lin = 10**(0.05*self.elem_gain_BS[(ue_id, i)])
-            pl_lin = 10**(-0.05*(pl-min(pl)))*elem_gain_UE_lin*elem_gain_BS_lin
-            # channel from UE to BS
-            self.bs_sv[(ue_id, i)] = pl_lin[None]*self.bs_sv[(ue_id, i)];
-            self.H[(ue_id, i)] = self.bs_sv[(ue_id,i)].dot(np.matrix.conj(self.ue_sv[(ue_id, i)]).T)
-            bs_sv_first = self.bs_sv[(ue_id,i)][:,0]
-            ue_sv_first = self.ue_sv[(ue_id, i)][:,0]
-            self.H_first[(ue_id, i)] = bs_sv_first[:,None].dot(np.matrix.conj(ue_sv_first[:,None]).T)
+            #pl_lin = 10**(-0.05*(pl-min(pl)))*elem_gain_UE_lin*elem_gain_BS_lin
+            g_l = 10**(-0.05*pl)*elem_gain_UE_lin*elem_gain_BS_lin
 
-            N_r, N_t = self.H[(ue_id, i)].shape
-            H_fro_norm = np.linalg.norm(self.H[(ue_id,i)], 'fro')
-            if H_fro_norm !=0:
-                self.H[(ue_id,i)] *= np.sqrt(N_t * N_r) / H_fro_norm
+            # channel from UE to BS
+            # H = sum{ g_l * e_rx * e_tx^H}
+            self.bs_sv[(ue_id, i)] *= g_l[None]
+            self.H[(ue_id, i)] = self.bs_sv[(ue_id,i)].dot(np.matrix.conj(self.ue_sv[(ue_id, i)]).T)
+
+            #N_r, N_t = self.H[(ue_id, i)].shape
+            #H_fro_norm = np.linalg.norm(self.H[(ue_id,i)], 'fro')
+            #if H_fro_norm !=0:
+            #    self.H[(ue_id,i)] *= np.sqrt(N_t * N_r) / H_fro_norm
         self.link_state[ue_id] = link_state
         # pure pathloss
         self.pl[ue_id] = np.array(pl, dtype = float)
@@ -365,7 +365,7 @@ class BS(object):
         if len(connected_id_list) !=0:
             # let's create a data structure
             data =[{'SINR':None,'SNR':None, 'intra_itf':1e-20, 'inter_itf':1e-20,'bs_id':self.bs_id,'bs_type':None,
-                    'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None, 'ue_elem':None, 'bs_elem':None
+                    'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None
                     , 'itf_gUE':1e-20, 'itf_UAV':1e-20, 'link_state':None,'n_los':0, 'n_nlos':0,
                     'los_itf':1e-20, 'nlos_itf':1e-20 , 'itf_no_ptx_list':[], 'itf_id_list':[],
                     'bf_gain':None, 'n_t':0}
@@ -385,28 +385,38 @@ class BS(object):
                 w_UE = ue.get_bf()
                 w_BS =  w_bs_bf_list[u]
 
-                pl_lin = 10**(-0.1*self.pl[u])
-                rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u, bs_sect_ind)])
-                tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u, bs_sect_ind)])
+                #pl_lin = 10**(-0.1*self.pl[u])
+                #rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u, bs_sect_ind)])
+                #tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u, bs_sect_ind)])
 
                 if self.frequency == 2e9: # and ue.ground_UE is True:
                     g = np.conj(w_BS).T.dot(self.H[(u, bs_sect_ind)])
-                    tx_rx_bf = abs(g*np.conj(g))[0]
-                    l_f =  tx_rx_bf*(pl_lin* rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+                    l_f = abs(g*np.conj(g))[0]
+                    #l_f =  tx_rx_bf*(pl_lin* rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
                 else:
                     g = np.conj(w_BS).T.dot(self.H[(u, bs_sect_ind)]).dot(w_UE)
-                    tx_rx_bf = abs(g * np.conj(g))
-                    l_f = tx_rx_bf * (pl_lin * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+                    l_f = abs(g * np.conj(g))
+                    #l_f = tx_rx_bf * (pl_lin * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
 
 
-                l_f_db = 10*np.log10(l_f.sum() + 1e-20)
+                l_f_db = 10*np.log10(l_f+ 1e-20)
                 l_f_db_list[i] = l_f_db
 
                 data[i]['ue_id'] = int(u)
                 data[i]['link_state'] = self.link_state[u]
                 data[i]['l_f'] = l_f_db
-                data[i]['bf_gain'] = 10*np.log10(tx_rx_bf)
-                print (data[i]['bf_gain'])
+
+                # compute beamforming gain
+                N_r, N_t = self.H[(u, bs_sect_ind)].shape
+                H_fro_norm = np.linalg.norm(self.H[(u, bs_sect_ind)], 'fro')
+                if H_fro_norm !=0:
+                    K = np.sqrt(N_t * N_r) / H_fro_norm
+                else:
+                    K = 0
+                bf_gain = l_f*(K**2)
+                data[i]['bf_gain'] = 10*np.log10(bf_gain)
+
+                #print (data[i]['bf_gain'])
                 data[i]['n_t'] = self.total_ue_n
                 serv_ue_loc = np.squeeze(ue.get_current_location())
                 #data[i]['ue_x'] = serv_ue_loc[0]
@@ -416,8 +426,8 @@ class BS(object):
                 #data[i]['bs_y'] = self.locations[0][1]
                 #data[i]['bs_z'] = self.locations[0][2]
                 data[i]['tx_power'] = ue.get_Tx_power()
-                data[i]['ue_elem'] = 10*np.log10(np.max(tx_elem_gain_lin_u)+ 1e-20)
-                data[i]['bs_elem'] = 10*np.log10(np.max(rx_elem_gain_lin_u) + 1e-20)
+               # data[i]['ue_elem'] = 10*np.log10(np.max(tx_elem_gain_lin_u)+ 1e-20)
+               # data[i]['bs_elem'] = 10*np.log10(np.max(rx_elem_gain_lin_u) + 1e-20)
                 if serv_ue_loc[2] > 20:
                     data[i]['ue_type'] = 'uav'
                 else:
@@ -448,19 +458,21 @@ class BS(object):
                     #resource_id_itf = ue2.get_resource_index()
                     if self.link_state[u2] != 0.0 and u!=u2: #and resource_id_connected == resource_id_itf:
                         w_UE = ue2.get_bf()
-                        pl_lin = 10 ** (-0.1 * self.pl[u2])
-                        rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2, bs_sect_ind)])
-                        tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
+                        #pl_lin = 10 ** (-0.1 * self.pl[u2])
+                        #rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2, bs_sect_ind)])
+                        #tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
                         Ptx = ue2.get_Tx_power()
                         P_t_lin = 10**(0.1*Ptx)
 
                         if self.frequency == 2e9: #and ue2.ground_UE is True:
                             g = np.conj(w_BS).T.dot(self.H[(u2,bs_sect_ind)])
-                            itf0 = (P_t_lin * abs(g*np.conj(g))*pl_lin*rx_elem_gain_lin_u * tx_elem_gain_lin_u ).sum() #*rx_elem_gain_lin_u * tx_elem_gain_lin_u
+                            #itf0 = (P_t_lin * abs(g*np.conj(g))*pl_lin*rx_elem_gain_lin_u * tx_elem_gain_lin_u ).sum() #*rx_elem_gain_lin_u * tx_elem_gain_lin_u
+                            itf0 = P_t_lin*abs(g)**2
                             itf += itf0
                         else:
                             g = np.conj(w_BS).T.dot(self.H[(u2, bs_sect_ind)]).dot(w_UE)
-                            itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+                            #itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+                            itf0 = P_t_lin*abs(g)**2
                             itf += itf0
 
                         if ue2.get_ue_type() == 'g_ue':
@@ -510,18 +522,20 @@ class BS(object):
                         w_UE  = r_ue.get_bf()
 
                         pl = self.pl[u2]
-                        pl_lin = 10 ** (-0.1 * pl)
+                        #pl_lin = 10 ** (-0.1 * pl)
 
-                        rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2,bs_sect_ind)])
-                        tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
+                        #rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2,bs_sect_ind)])
+                        #tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
 
                         if self.frequency == 2e9: # and r_ue.ground_UE is True:
                             g = np.conj(w_BS).T.dot(self.H[(u2, bs_sect_ind)])#.dot(w_UE)
-                            itf0 = (P_t_lin *abs(g*np.conj(g)) *pl_lin *rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum() #rx_elem_gain_lin_u * *rx_elem_gain_lin_u * tx_elem_gain_lin_u
+                            #itf0 = (P_t_lin *abs(g*np.conj(g)) *pl_lin *rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum() #rx_elem_gain_lin_u * *rx_elem_gain_lin_u * tx_elem_gain_lin_u
+                            itf0 = P_t_lin*abs(g)**2
                             itf += itf0
                         else:
                             g = np.conj(w_BS).T.dot(self.H[(u2, bs_sect_n)]).dot(w_UE)
-                            itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()  # rx_elem_gain_lin_u *
+                            #itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()  # rx_elem_gain_lin_u *
+                            itf0 = P_t_lin*abs(g)**2
                             itf += itf0
 
                         data[i]['itf_no_ptx_list'].append(10*np.log10(itf0/P_t_lin + 1e-20))

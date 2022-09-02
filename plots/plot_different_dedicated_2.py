@@ -46,13 +46,13 @@ def get_df(dir_=None, isd_d=200, n_uav=5, n_s=1, uav=False, n_t=10, feature='SIN
 
     for t in range(n_iter):
         if zero_tilted is True:
-            data = pd.read_csv('../%s/full_power_zero_tilted_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
+            data = pd.read_csv('/%s/full_power_zero_tilted_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
                 dir_, n_uav, isd_d, n_s, height, t), delimiter='\t')
         elif full_power is True:
-            data = pd.read_csv('../%s/full_power_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
+            data = pd.read_csv('/%s/full_power_uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
                 dir_, n_uav, isd_d, n_s, height, t), delimiter='\t')
         else:
-            data = pd.read_csv('../%s/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
+            data = pd.read_csv('/%s/uplink_itf_UAV=%d_ISD_d_=%d_ns=%d_h=%d_28G_%d.txt' % (
             dir_, n_uav, isd_d, n_s, height, t), delimiter='\t')
         df = pd.concat([df, data])
 
@@ -101,17 +101,17 @@ def get_df(dir_=None, isd_d=200, n_uav=5, n_s=1, uav=False, n_t=10, feature='SIN
 n_s = 1
 uav = True
 closed = False
-
+abs_dir = 'home/seongjoonkang/backup/'
 if closed is True:
-    dir_1 = 'test_data_closed/%d_stream_ptrl' % n_s
-    dir_2 = 'test_data_closed/%d_stream_ptrl' % (n_s + 1)
-    dir_3 = 'test_data_closed/%d_stream_ptrl' % (n_s + 2)
-    dir_4 = 'test_data_closed/%d_stream_ptrl' % (n_s + 3)
+    dir_1 = abs_dir + 'test_data_closed/%d_stream_ptrl' % n_s
+    dir_2 = abs_dir + 'test_data_closed/%d_stream_ptrl' % (n_s + 1)
+    dir_3 = abs_dir + 'test_data_closed/%d_stream_ptrl' % (n_s + 2)
+    dir_4 = abs_dir + 'test_data_closed/%d_stream_ptrl' % (n_s + 3)
 else:
-    dir_1 = 'test_data/%d_stream_ptrl' % n_s
-    dir_2 = 'test_data/%d_stream_ptrl' % (n_s + 1)
-    dir_3 = 'test_data/%d_stream_ptrl' % (n_s + 2)
-    dir_4 = 'test_data/%d_stream_ptrl' % (n_s + 3)
+    dir_1 = abs_dir + 'test_data/%d_stream_ptrl' % n_s
+    dir_2 = abs_dir + 'test_data/%d_stream_ptrl' % (n_s + 1)
+    dir_3 = abs_dir + 'test_data/%d_stream_ptrl' % (n_s + 2)
+    dir_4 = abs_dir + 'test_data/%d_stream_ptrl' % (n_s + 3)
 
 fig = plt.figure()
 ax = fig.add_subplot(111, label = '1')
@@ -120,27 +120,30 @@ plt.setp(ax.get_xticklabels(), fontsize=16)
 plt.setp(ax.get_yticklabels(), fontsize=16)
 
 feature = 'SINR'
-inr1, _ = get_df(dir_=dir_2, n_s=2, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 1')
-inr2, _ = get_df(dir_=dir_2, n_s=2, isd_d=800, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 2')
-inr3, _ = get_df(dir_=dir_2, n_s=2, isd_d=400, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 3')
-inr4, _ = get_df(dir_=dir_2, n_s=2, isd_d=200, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 4')
-
-
-feature = 'capacity'
 sinr1, _ = get_df(dir_=dir_2, n_s=2, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 1')
 sinr2, _ = get_df(dir_=dir_2, n_s=2, isd_d=800, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 2')
 sinr3, _ = get_df(dir_=dir_2, n_s=2, isd_d=400, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 3')
 sinr4, _ = get_df(dir_=dir_2, n_s=2, isd_d=200, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 4')
 
+
+feature = 'capacity'
+rate1, _ = get_df(dir_=dir_2, n_s=2, isd_d=0, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 1')
+rate2, _ = get_df(dir_=dir_2, n_s=2, isd_d=800, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 2')
+rate3, _ = get_df(dir_=dir_2, n_s=2, isd_d=400, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 3')
+rate4, _ = get_df(dir_=dir_2, n_s=2, isd_d=200, uav=uav, n_t=10, feature=feature, height=120, n_uav = 5, label_ = r'n$_s$ = 4')
+
 colors_ = ['r','g','b','k']
 lt_ = ['--',':',  '-.','-']
+h_ = [0, 800, 400, 200]
 
-for i, (sinr, case) in enumerate(zip([sinr1, sinr2, sinr3, sinr4], [r'ISD$_d$ = %s'%('\u221e'),r'ISD$_d$ = 800m', r'ISD$_d$ = 400m', r'ISD$_d$ = 200m'])):
+for i, (rate, case) in enumerate(zip([rate1, rate2, rate3, rate4], [r'ISD$_d$ = %s'%('\u221e'),r'ISD$_d$ = 800m', r'ISD$_d$ = 400m', r'ISD$_d$ = 200m'])):
     if closed is True and i ==0:
         continue
     else:
-        ax.plot(np.sort(sinr), np.linspace(0, 1, len(sinr)), label= case ,
+        ax.plot(np.sort(rate), np.linspace(0, 1, len(rate)), label= case ,
                  color=colors_[i], linestyle= lt_[i], linewidth=2.5)
+        np.savetxt('UAV_rate_open_access_ISD_d='+str(h_[i]), rate)
+
 
 ax.set_xlabel ('Data Rate (Gbps)', fontsize = 18)
 ax.grid()
@@ -151,12 +154,13 @@ ax2 = fig.add_subplot(111, label = '2', frame_on =False)
 ax2.set_xlabel ('SINR (dB)', fontsize = 18)
 ax2.set_ylabel('CCDF ', fontsize=18)
 
-for i, (sinr, case) in enumerate(zip([inr1, inr2, inr3, inr4], [r'ISD$_{\rm d}$ = %s'%('\u221e'),r'ISD$_{\rm d}$ = 800m', r'ISD$_{\rm d}$ = 400m', r'ISD$_{\rm d}$ = 200m'])):
+for i, (sinr, case) in enumerate(zip([sinr1, sinr2, sinr3, sinr4], [r'ISD$_{\rm d}$ = %s'%('\u221e'),r'ISD$_{\rm d}$ = 800m', r'ISD$_{\rm d}$ = 400m', r'ISD$_{\rm d}$ = 200m'])):
     if closed is True and i ==0:
         continue
     else:
         ax2.plot(np.flip(np.sort(sinr)), np.linspace(0, 1, len(sinr)), label= case ,
                  color=colors_[i], linestyle= lt_[i], linewidth=2.5)
+        np.savetxt('UAV_SINR_open_access_ISD_d='+str(h_[i]), sinr)
 if closed is False:
     if uav is True:
         ellipse1 = Ellipse(xy=(12.5, .76), width=3.3, height=0.25,

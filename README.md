@@ -3,3 +3,4 @@
 
 * Kang, S., Mezzavilla, M., Lozano, A., Geraci, G., Rangan, S., Semkin, V., Xia, W., Loianno, G., "Coexistence of UAVs and Terrestrial Users in Millimeter-Wave Urban Networks"
 https://arxiv.org/abs/2209.08964
+This paper will be published in Globecomm 2022 workshop

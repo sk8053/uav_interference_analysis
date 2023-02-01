@@ -5,4 +5,4 @@
 https://arxiv.org/abs/2209.08964
 
 
-This paper will be published in Globecomm 2022 workshop
+This paper is published in Globecomm 2022 workshop

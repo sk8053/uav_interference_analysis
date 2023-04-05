@@ -228,7 +228,6 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan,
 
                     # Compute path loss with element gains
                     pl_elemi = chan.pl - bs_elem_gaini - ue_elem_gaini
-
                     bs_elem_gain_dict[i_bs] = bs_elem_gaini
                     ue_elem_gain_dict[i_bs] = ue_elem_gaini
                     # Select the path with the lowest path loss
@@ -245,8 +244,7 @@ def dir_path_loss_multi_sect(bs_arr_list:list, ue_arr_list:list, chan:MPChan,
                     # departure angles at UEs
                     ue_svi = ue_arr.sv(aoa_phi, aoa_theta
                                               , return_elem_gain=return_elem_gain, drone=isdrone)  #
-                    #ue_svi = ue_svi[:2,:]
-                    #bs_svi = bs_svi[:2,:]
+
                     bs_sv_dict[i_bs] = bs_svi#/ bs_elem_gain_lin_i[:, None]
                     ue_sv_dict[i_bs]  = ue_svi#/ ue_elem_gain_lin_i[:, None]
 

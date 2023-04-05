@@ -3,7 +3,7 @@ array.py:  Classes for modeling antenna arrays
 """
 import numpy as np
 from mmwchanmod.common.constants import PhyConst
-from mmwchanmod.common.spherical import sph_to_cart, spherical_add_sub_new, spherical_add_sub
+from mmwchanmod.common.spherical import sph_to_cart, spherical_add_sub, GCS_LCS_conversion
 from mmwchanmod.sim.antenna import plot_pattern, ElemIsotropic
 #from mmwchanmod.sim.drone_antenna_field import drone_antenna_gain
 from operator import itemgetter
@@ -13,7 +13,6 @@ class ArrayBase(object):
     """
 
     def __init__(self, elem=None, fc:float =28e9, elem_pos:list =np.array([[0, 0, 0]])):
-
         """
         Constructor
         Parameters
@@ -36,7 +35,6 @@ class ArrayBase(object):
 
     def sv(self, phi:list, theta:list,
            return_elem_gain:bool =False, drone:bool = False):
-
         """
         Gets the steering vectors for the array
         Parameters
@@ -73,7 +71,7 @@ class ArrayBase(object):
             dly = u.dot(self.elem_pos.T) / lam
 
             # Phase rotation
-            usv = np.exp(1j * 2 * np.pi * dly)
+            usv = np.exp(-1j * 2 * np.pi * dly)
             return usv
         # return only element gains
         else:
@@ -97,10 +95,57 @@ class ArrayBase(object):
                 if np.ndim(elem_gain)==0:
                     elem_gain = np.array([elem_gain])
             else: # if it is ground UE
-
                 elem_gain = self.elem.response(phi, theta)
             return elem_gain
 
+    def sv_(self, phi: list, theta: list,
+           include_elem: bool = True, drone: bool = False):
+        """
+        Gets the steering vectors for the array
+        Parameters
+        ----------
+        phi : (n,) array
+            azimuth angle in degrees
+        theta : (n,) array
+            elevation angle in degrees
+        return_elem_gain : boolean, default=False
+            Indicates if the element gain is to be returned
+        drone: this indicates weather the array is in drone side or BS side
+        Returns
+        -------
+        usv:  (n,nant) array
+            the steering vectors for each angle
+        elem_gain:  (n,) array
+            element gains in dBi.  Returned only if return_elem_gain==True
+        """
+        # Convert scalar values to vector
+        if np.isscalar(phi):
+            phi = np.array([phi])
+        if np.isscalar(theta):
+            theta = np.array([theta])
+
+        u = sph_to_cart(1, phi, 90 - theta)
+
+        # Compute the delay along each path in wavelengths
+        lam = PhyConst.light_speed / self.fc
+        dly = u.dot(self.elem_pos.T) / lam
+
+
+        # Phase rotation
+        usv = np.exp(-1j * 2 * np.pi * dly)
+
+        # return only spatial channels
+        if include_elem is False:
+            # Get unit vectors in the direction of the rays
+            # Note the conversion from elevation to inclination
+            return usv
+        # return only element gains
+        else:
+            elem_gain = self.elem.response(phi, theta)
+            elem_gain = 10**(elem_gain*0.1)
+
+
+            return elem_gain[:,None]*usv
     def conj_bf(self, phi, theta):
         """
         Gets the conjugate beamforming vectors for the array.
@@ -125,7 +170,7 @@ class ArrayBase(object):
         if np.isscalar(theta):
             theta = np.array([theta])
 
-        w = self.sv(phi, theta, include_elem=False)
+        w = self.sv_(phi, theta, include_elem=False)
         wmag = np.sqrt(np.sum(np.abs(w) ** 2, axis=1))
         w = np.conj(w) / wmag[:, None]
 
@@ -150,7 +195,7 @@ class ArrayBase(object):
         """
 
         pat_fn = lambda phi, theta: \
-            20 * np.log10(np.abs(self.sv(phi, theta, include_elem=include_elem).dot(w)))
+            20 * np.log10(np.abs(self.sv_(phi, theta, include_elem=include_elem).dot(w)))
 
         return plot_pattern(pat_fn, **kwargs)
 
@@ -199,7 +244,7 @@ class RotatedArray(ArrayBase):
     A rotated array.
     """
 
-    def __init__(self, arr:list, phi0:float =0, theta0:float =0,drone = False,  **kwargs):
+    def __init__(self, arr:list, phi0:float =0, theta0:float =0, drone = False,  **kwargs):
         """
         Constructor
         Parameters
@@ -215,6 +260,7 @@ class RotatedArray(ArrayBase):
         # Super constructor
         ArrayBase.__init__(self,**kwargs)
         self.arr = arr
+
         self.phi0 = phi0
         self.theta0 = theta0
         self.drone  = drone
@@ -233,14 +279,25 @@ class RotatedArray(ArrayBase):
         """
         # Note the conversion from elevation to inclination
 
-        if self.drone is False:
-            phi1, theta1 = spherical_add_sub( phi, 90 - theta, self.phi0,  90-self.theta0, sub=True) # 90 - self.theta0
-        else:
+        phi_prime, theta_prime = spherical_add_sub(phi, 90 - theta, self.phi0, 90 - self.theta0, sub=True)  # 90 - self.theta0
+        #if self.drone is False:
+        #    phi_prime, theta_prime = spherical_add_sub( phi, 90 - theta, self.phi0,  90-self.theta0, sub=True) # 90 - self.theta0
+        #else:
             # elevation angle:  theta -> theta + theta0
             # inclination angle: (90 - theta) -> (90 - theta - theta0)
-            phi1, theta1 = spherical_add_sub_new(phi, 90 - theta, self.phi0,  - self.theta0, sub=True)  # 90 - self.theta0
-        return phi1, theta1
+        #    phi_prime, theta_prime = spherical_add_sub(phi, 90 - theta, self.phi0,  90 - self.theta0, sub=True)  # 90 - self.theta0
+        '''
 
+        rot_angle = dict()
+        rot_angle['alpha'] = np.deg2rad(self.phi0)  # horizontal angle to rotate
+        rot_angle['beta'] = np.deg2rad(90 -self.theta0)  # inclination angle = 90 - elevation angle
+        rot_angle['gamma'] = np.deg2rad(0)
+        loc_angle, _ = GCS_LCS_conversion(rot_angle, theta, phi)
+
+        theta_prime = np.rad2deg(loc_angle['theta_prime'])
+        phi_prime = np.rad2deg(loc_angle['phi_prime'])
+        '''
+        return phi_prime, theta_prime
     def sv(self, phi, theta,**kwargs):
         #self.print_theta = print_theta
         """
@@ -266,7 +323,37 @@ class RotatedArray(ArrayBase):
         phi1, theta1 = self.global_to_local(phi, theta)
 
         # Call the array class method with the rotated angles
+
         out = self.arr.sv(phi1, theta1, **kwargs)
+
+        return out
+    def sv_(self, phi, theta,**kwargs):
+        #self.print_theta = print_theta
+        """
+        Gets the steering vectors for the array
+        Parameters
+        ----------
+        phi, theta : array of floats
+            azimuth and elevation angles in the global coordinate system
+        **kwargs : dictionary
+            Other arguments in ArrayBase.sv()
+        Returns
+        -------
+        See ArrayBase.sv()
+
+        """
+        # Convert scalar values to vector
+        if np.isscalar(phi):
+            phi = np.array([phi])
+        if np.isscalar(theta):
+            theta = np.array([theta])
+
+        # Rotate angles
+        phi1, theta1 = self.global_to_local(phi, theta)
+
+        # Call the array class method with the rotated angles
+
+        out = self.arr.sv_(phi1, theta1, **kwargs)
 
         return out
 

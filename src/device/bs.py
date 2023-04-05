@@ -56,12 +56,15 @@ class BS(object):
             self.N_a = 64
         # sectorize the antenna arrays for BSs,
         # BSs are equipped with multiple sectors
+
+
         if bs_type == 1: # 1 is terrestrial BS, 0 is aerial BS
             arr_gnb_list_t = multi_sect_array(arr_gnb_t, sect_type='azimuth', nsect=self.n_sect, theta0=-12)
             self.arr_gnb_list = arr_gnb_list_t
         else:
             arr_gnb_list_a = multi_sect_array(arr_gnb_a, sect_type='azimuth', nsect=self.n_sect, theta0=45)
             self.arr_gnb_list = arr_gnb_list_a
+
 
         self.bs_sv, self.ue_sv = dict(), dict()
         self.link_state = dict()
@@ -73,7 +76,6 @@ class BS(object):
         self.connected_uav_id_list = np.array([], dtype = int)
         self.connected_rx_power_list = np.array([])
         self.H = dict()
-        #self.H_first = dict()
         self.SNR_u = dict()
         self.SNR_u_from_itf = dict()
 
@@ -150,21 +152,12 @@ class BS(object):
             self.elem_gain_BS[(ue_id, i)] = data['bs_elem_gain_dict'][i]
             self.bs_sv[(ue_id, i)] = data['bs_sv_dict'][i].T
             self.ue_sv[(ue_id, i)] = data['ue_sv_dict'][i].T
-
-            elem_gain_UE_lin = 10**(0.05*self.elem_gain_UE[(ue_id, i)])
-            elem_gain_BS_lin = 10**(0.05*self.elem_gain_BS[(ue_id, i)])
-            #pl_lin = 10**(-0.05*(pl-min(pl)))*elem_gain_UE_lin*elem_gain_BS_lin
-            g_l = 10**(-0.05*pl)*elem_gain_UE_lin*elem_gain_BS_lin
-
             # channel from UE to BS
-            # H = sum{ g_l * e_rx * e_tx^H}
-            self.bs_sv[(ue_id, i)] *= g_l[None]
             self.H[(ue_id, i)] = self.bs_sv[(ue_id,i)].dot(np.matrix.conj(self.ue_sv[(ue_id, i)]).T)
-
-            #N_r, N_t = self.H[(ue_id, i)].shape
-            #H_fro_norm = np.linalg.norm(self.H[(ue_id,i)], 'fro')
-            #if H_fro_norm !=0:
-            #    self.H[(ue_id,i)] *= np.sqrt(N_t * N_r) / H_fro_norm
+            N_r, N_t = self.H[(ue_id, i)].shape
+            H_fro_norm = np.linalg.norm(self.H[(ue_id,i)], 'fro')
+            if H_fro_norm !=0:
+                self.H[(ue_id,i)] *= np.sqrt(N_t * N_r) / H_fro_norm
         self.link_state[ue_id] = link_state
         # pure pathloss
         self.pl[ue_id] = np.array(pl, dtype = float)
@@ -229,42 +222,6 @@ class BS(object):
         return connection_complete, self.connected_entities
 
 
-    def get_beamforming_vectors_from_codebook(self,connected_UE_list:list):
-        """
-        find beamforming vector from codebook at BS side
-
-        Parameters
-        ----------
-        connected_UE_list: list of ue objects
-        list of connected ue and uav objects
-
-        Returns
-        ----------
-        w_codebook_bf_list: list
-        list of mmse beamforing vectors corresponding to each connected UE or UAV for uplink case
-        """
-        codebook = np.loadtxt('src/device/bs_codebook.txt', dtype = complex)
-        w_codebook_bf_list = dict()
-        for ue in connected_UE_list:
-            u_id = ue.get_id()
-            bs_sect_n = ue.get_bs_sect_n()
-            w_UE = ue.get_bf()
-            HW = self.H[(u_id, bs_sect_n)].dot(w_UE)
-            s = -200
-            code_op, i_op = None, None
-
-            for i, code in enumerate(codebook):
-
-                p = np.abs(np.conj(code).T.dot(HW))**2
-
-                if s<p:
-                    code_op = code/np.linalg.norm(code)
-                    s = p
-                    i_op = i
-            w_codebook_bf_list[u_id] = code_op
-            # remove the selected beamforming vector from codebook
-            #codebook = np.delete(codebook,i_op, axis = 0)
-        return w_codebook_bf_list
 
     def get_MMSE_beamform_vectors(self,connected_UE_list, snr_sum_rest_UEs):
         """
@@ -301,8 +258,8 @@ class BS(object):
             HW = self.H[(u_, bs_sect_n)].dot(w_UE2)
             HW_dl = self.H[(u_, bs_sect_n)].dot(w_UE2_dl)
             snr_ratio = self.SNR_u[(u_, bs_sect_n)] #/self.SNR_u[(u_, bs_sect_n)]
-            sum_cov += snr_ratio * (np.outer(HW, np.matrix.conjugate(HW)))
-            sum_cov_dl += snr_ratio * ( np.outer(HW_dl,np.matrix.conjugate(HW_dl)))
+            sum_cov += snr_ratio * (np.outer(HW, np.matrix.conjugate(HW))).real
+            sum_cov_dl += snr_ratio * ( np.outer(HW_dl,np.matrix.conjugate(HW_dl))).real
 
         for i, ue in enumerate(connected_UE_list):
             u = ue.get_id()
@@ -324,10 +281,10 @@ class BS(object):
                 w_mmse_list_downlink[u] = w_BS_downlink #np.matrix.conj(w_BS_downlink)
         return w_mmse_list, w_mmse_list_downlink
 
-    def get_interference(self,total_UE_list:list =None, total_connected_ue_id_list:list = None, codebook_bf = False):
+    def get_interference(self,total_UE_list:list =None, total_connected_ue_id_list:list = None):
         """
         Compute interference MU-MIMO uplink case by employing MMSE receiver at BS side
-        1) decide the MMSE beamforming or codebook-based beamforming vector for the given connections
+        1) decide the MMSE beamforming vector for the given connections
         2) compute the beamforming gains and pathloss gains
         3) calculate inter- and intra- cell interference
 
@@ -365,17 +322,15 @@ class BS(object):
         if len(connected_id_list) !=0:
             # let's create a data structure
             data =[{'SINR':None,'SNR':None, 'intra_itf':1e-20, 'inter_itf':1e-20,'bs_id':self.bs_id,'bs_type':None,
-                    'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None
+                    'ue_id':None,'ue_type':None, 'tx_power':None, 'l_f':None, 'ue_elem':None, 'bs_elem':None
                     , 'itf_gUE':1e-20, 'itf_UAV':1e-20, 'link_state':None,'n_los':0, 'n_nlos':0,
                     'los_itf':1e-20, 'nlos_itf':1e-20 , 'itf_no_ptx_list':[], 'itf_id_list':[],
                     'bf_gain':None, 'n_t':0}
                    for i in range (len(connected_id_list))]
+            #'ue_x':None,'ue_y':None, 'ue_z':None, 'bs_x':None, 'bs_y':None, 'bs_z':None,
 
-            if codebook_bf is False:
-                # get mmse list for uplink and mmse precoder list for downlink
-                w_bs_bf_list,self.w_mmse_precoder_list = self.get_MMSE_beamform_vectors(connected_UE_list, snr_sum_rest_UEs)
-            else:
-                w_bs_bf_list = self.get_beamforming_vectors_from_codebook(connected_UE_list)
+            # get mmse list for uplink and mmse precoder list for downlink
+            w_mmse_list,self.w_mmse_precoder_list = self.get_MMSE_beamform_vectors(connected_UE_list, snr_sum_rest_UEs)
 
             # the list of large-scale fading including pathloss
             l_f_db_list = np.zeros(len(connected_UE_list))
@@ -383,40 +338,29 @@ class BS(object):
                 u = ue.get_id()
                 bs_sect_ind = ue.get_bs_sect_n()
                 w_UE = ue.get_bf()
-                w_BS =  w_bs_bf_list[u]
+                w_BS =  w_mmse_list[u]
 
-                #pl_lin = 10**(-0.1*self.pl[u])
-                #rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u, bs_sect_ind)])
-                #tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u, bs_sect_ind)])
+                pl_lin = 10**(-0.1*self.pl[u])
+                rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u, bs_sect_ind)])
+                tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u, bs_sect_ind)])
 
                 if self.frequency == 2e9: # and ue.ground_UE is True:
-                    g = np.conj(w_BS).T.dot(self.H[(u, bs_sect_ind)])
-                    l_f = abs(g*np.conj(g))[0]
-                    #l_f =  tx_rx_bf*(pl_lin* rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+                    g = np.conj(w_BS).dot(self.H[(u, bs_sect_ind)])
+                    tx_rx_bf = abs(g*np.conj(g))[0]
+                    l_f =  tx_rx_bf*(pl_lin* rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
                 else:
-                    g = np.conj(w_BS).T.dot(self.H[(u, bs_sect_ind)]).dot(w_UE)
-                    l_f = abs(g * np.conj(g))
-                    #l_f = tx_rx_bf * (pl_lin * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
+                    g = np.conj(w_BS).dot(self.H[(u, bs_sect_ind)]).dot(w_UE)
+                    tx_rx_bf = abs(g * np.conj(g))
+                    l_f = tx_rx_bf * (pl_lin * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
 
 
-                l_f_db = 10*np.log10(l_f+ 1e-20)
+                l_f_db = 10*np.log10(l_f.sum() + 1e-20)
                 l_f_db_list[i] = l_f_db
 
                 data[i]['ue_id'] = int(u)
                 data[i]['link_state'] = self.link_state[u]
                 data[i]['l_f'] = l_f_db
-
-                # compute beamforming gain
-                N_r, N_t = self.H[(u, bs_sect_ind)].shape
-                H_fro_norm = np.linalg.norm(self.H[(u, bs_sect_ind)], 'fro')
-                if H_fro_norm !=0:
-                    K = np.sqrt(N_t * N_r) / H_fro_norm
-                else:
-                    K = 0
-                bf_gain = l_f*(K**2)
-                data[i]['bf_gain'] = 10*np.log10(bf_gain)
-
-                #print (data[i]['bf_gain'])
+                data[i]['bf_gain'] = 10*np.log10(tx_rx_bf)
                 data[i]['n_t'] = self.total_ue_n
                 serv_ue_loc = np.squeeze(ue.get_current_location())
                 #data[i]['ue_x'] = serv_ue_loc[0]
@@ -426,8 +370,8 @@ class BS(object):
                 #data[i]['bs_y'] = self.locations[0][1]
                 #data[i]['bs_z'] = self.locations[0][2]
                 data[i]['tx_power'] = ue.get_Tx_power()
-               # data[i]['ue_elem'] = 10*np.log10(np.max(tx_elem_gain_lin_u)+ 1e-20)
-               # data[i]['bs_elem'] = 10*np.log10(np.max(rx_elem_gain_lin_u) + 1e-20)
+                data[i]['ue_elem'] = 10*np.log10(np.max(tx_elem_gain_lin_u)+ 1e-20)
+                data[i]['bs_elem'] = 10*np.log10(np.max(rx_elem_gain_lin_u) + 1e-20)
                 if serv_ue_loc[2] > 20:
                     data[i]['ue_type'] = 'uav'
                 else:
@@ -443,7 +387,7 @@ class BS(object):
                 connected_UE_list2 = np.delete(connected_UE_list, i)
 
                 u = ue.get_id()
-                w_BS = w_bs_bf_list[u]
+                w_BS = w_mmse_list[u]
                 bs_sect_ind = ue.get_bs_sect_n()
                 #resource_id_connected = ue.get_resource_index()
 
@@ -458,21 +402,19 @@ class BS(object):
                     #resource_id_itf = ue2.get_resource_index()
                     if self.link_state[u2] != 0.0 and u!=u2: #and resource_id_connected == resource_id_itf:
                         w_UE = ue2.get_bf()
-                        #pl_lin = 10 ** (-0.1 * self.pl[u2])
-                        #rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2, bs_sect_ind)])
-                        #tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
+                        pl_lin = 10 ** (-0.1 * self.pl[u2])
+                        rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2, bs_sect_ind)])
+                        tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
                         Ptx = ue2.get_Tx_power()
                         P_t_lin = 10**(0.1*Ptx)
 
                         if self.frequency == 2e9: #and ue2.ground_UE is True:
-                            g = np.conj(w_BS).T.dot(self.H[(u2,bs_sect_ind)])
-                            #itf0 = (P_t_lin * abs(g*np.conj(g))*pl_lin*rx_elem_gain_lin_u * tx_elem_gain_lin_u ).sum() #*rx_elem_gain_lin_u * tx_elem_gain_lin_u
-                            itf0 = P_t_lin*abs(g)**2
+                            g = np.conj(w_BS).dot(self.H[(u2,bs_sect_ind)])
+                            itf0 = (P_t_lin * abs(g*np.conj(g))*pl_lin*rx_elem_gain_lin_u * tx_elem_gain_lin_u ).sum() #*rx_elem_gain_lin_u * tx_elem_gain_lin_u
                             itf += itf0
                         else:
-                            g = np.conj(w_BS).T.dot(self.H[(u2, bs_sect_ind)]).dot(w_UE)
-                            #itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
-                            itf0 = P_t_lin*abs(g)**2
+                            g = np.conj(w_BS).dot(self.H[(u2, bs_sect_ind)]).dot(w_UE)
+                            itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()
                             itf += itf0
 
                         if ue2.get_ue_type() == 'g_ue':
@@ -503,7 +445,7 @@ class BS(object):
             # compute inter-cell interference
             for i, ue in enumerate(connected_UE_list):
                 u = ue.get_id()
-                w_BS = w_bs_bf_list[u]
+                w_BS = w_mmse_list[u]
                 bs_sect_ind = ue.get_bs_sect_n()
 
                 itf, itf_UAV, itf_gUE =0, 0, 0
@@ -522,20 +464,18 @@ class BS(object):
                         w_UE  = r_ue.get_bf()
 
                         pl = self.pl[u2]
-                        #pl_lin = 10 ** (-0.1 * pl)
+                        pl_lin = 10 ** (-0.1 * pl)
 
-                        #rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2,bs_sect_ind)])
-                        #tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
+                        rx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_BS[(u2,bs_sect_ind)])
+                        tx_elem_gain_lin_u = 10 ** (0.1 * self.elem_gain_UE[(u2, bs_sect_ind)])
 
                         if self.frequency == 2e9: # and r_ue.ground_UE is True:
-                            g = np.conj(w_BS).T.dot(self.H[(u2, bs_sect_ind)])#.dot(w_UE)
-                            #itf0 = (P_t_lin *abs(g*np.conj(g)) *pl_lin *rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum() #rx_elem_gain_lin_u * *rx_elem_gain_lin_u * tx_elem_gain_lin_u
-                            itf0 = P_t_lin*abs(g)**2
+                            g = np.conj(w_BS).dot(self.H[(u2, bs_sect_ind)])#.dot(w_UE)
+                            itf0 = (P_t_lin *abs(g*np.conj(g)) *pl_lin *rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum() #rx_elem_gain_lin_u * *rx_elem_gain_lin_u * tx_elem_gain_lin_u
                             itf += itf0
                         else:
-                            g = np.conj(w_BS).T.dot(self.H[(u2, bs_sect_n)]).dot(w_UE)
-                            #itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()  # rx_elem_gain_lin_u *
-                            itf0 = P_t_lin*abs(g)**2
+                            g = np.conj(w_BS).dot(self.H[(u2, bs_sect_n)]).dot(w_UE)
+                            itf0 = (P_t_lin * pl_lin * abs(g * np.conj(g)) * rx_elem_gain_lin_u * tx_elem_gain_lin_u).sum()  # rx_elem_gain_lin_u *
                             itf += itf0
 
                         data[i]['itf_no_ptx_list'].append(10*np.log10(itf0/P_t_lin + 1e-20))

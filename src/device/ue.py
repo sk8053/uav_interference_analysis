@@ -134,12 +134,6 @@ class UE(object):
             self.g_chan_list = list(chan_list)
         '''
         self.channels = chan_list
-        #for chan in chan_list:
-        #    if chan.link_state !=0 and len(chan.pl)>10:
-        #        print (chan.dly*1e9)
-        #        chan.pl = chan.pl[:10]
-        #        chan.ang = chan.ang[:10]
-
         self.link_state = link_state
 
     def get_random_locations(self):
@@ -165,8 +159,7 @@ class UE(object):
         else:
             self.loc = np.array(loc).reshape(-1,3)
 
-    def get_long_term_beamforming_vectors(self, ue_sv:list, bs_sv:list, n_rand:int = 10, uplink:bool = True, get_w_bs= False
-                                          , path_gain:list = None):
+    def get_long_term_beamforming_vectors(self, ue_sv:list, bs_sv:list, n_rand:int = 10, uplink:bool = True, get_w_bs= False):
         '''
         compute the long-term beamfomring vector based on channel information at BS and UE sides
 
@@ -185,11 +178,7 @@ class UE(object):
 
         '''
         n_r, n_t = ue_sv.shape[1], bs_sv.shape[1]
-        #print(pl.shape, ue_sv.shape)
-        path_gain_lin = 10**(-0.05*(path_gain - min(path_gain)))
-
         ue_sv, bs_sv = ue_sv.T, bs_sv.T
-        bs_sv = path_gain_lin[None] * bs_sv
         Cov_H_bs, Cov_H_ue = np.zeros((n_rand, n_t, n_t), dtype=complex), np.zeros((n_rand, n_r, n_r), dtype=complex)
 
         for i in range(n_rand):
@@ -198,12 +187,12 @@ class UE(object):
             if uplink is True:
                 H = bs_sv.dot(np.matrix.conj(ue_sv).T)  # H(f) shape = 64*16
                 theta_random = np.random.uniform(low=-np.pi, high=np.pi, size=(H.shape[0],))
-                H = H*np.exp(-1j*theta_random[:,None])
+                H = H*theta_random[:,None]
                 Cov_H_ue[i] =np.matrix.conj(H).T.dot(H)
             else: # downlink channel case
                 H = ue_sv.dot(np.matrix.conj(bs_sv).T)  # H(f) shape = 16*64
                 theta_random = np.random.uniform(low=-np.pi, high=np.pi, size=(H.shape[0],))
-                H = H * np.exp(-1j*theta_random[:,None])
+                H = H * theta_random[:,None]
                 Cov_H_ue[i] = H.dot(np.matrix.conj(H).T)
             #if get_w_bs is True:
             #    Cov_H_bs[i] = np.matrix.conj(H).T.dot(H)
@@ -304,27 +293,22 @@ class UE(object):
 
             # power control
             # compute Tx power of UE according to simple power control algorithm according to the formula given to 3GPP
-            if self.get_ue_type() == 'g_ue': # ground UEs performing power-control always
+            # if self.get_ue_type() == 'g_ue':
+            if self.channel_info.ptrl is True:
                 P_ex = (self.channels[serv_bs_id].pl - self.bs_elem_gain[serv_bs_id][self.serving_bs_sect_ind]
                                 - self.ue_elem_gain[serv_bs_id][self.serving_bs_sect_ind]) * self.alpha + self.P0
                 P_ex = 10*np.log10(np.sum(10**(0.01*P_ex)))
                 self.tx_power = min(P_ex, self.channel_info.UE_TX_power)
-            else: # UAV can do power -control or not
-                if self.channel_info.ptrl is True:
-                    P_ex = (self.channels[serv_bs_id].pl - self.bs_elem_gain[serv_bs_id][self.serving_bs_sect_ind]
-                                - self.ue_elem_gain[serv_bs_id][self.serving_bs_sect_ind]) * self.alpha + self.P0
-                    P_ex = 10*np.log10(np.sum(10**(0.01*P_ex)))
-                    self.tx_power = min(P_ex, self.channel_info.UE_TX_power)
-                else:
-                    self.tx_power = 23
+            else:
+                self.tx_power = 23
 
-    def compute_channels(self, codebook_bf = False):
+    def compute_channels(self):
         '''
         compute channel between UE and BS
          '''
         if len(self.loc) == 0:
             self.loc = self.get_random_locations()
-        pl_list = []
+
         # then compute path loss, channel matrices, and beamforming vectors for all links
         for bs_id, channel in enumerate(self.channels):
             data = dir_path_loss_multi_sect(self.arr_gnb_list[bs_id], self.arr_ue_list, channel,
@@ -352,46 +336,14 @@ class UE(object):
             data['ue_elem_gain_dict'] = self.ue_elem_gain[bs_id]
             data['bs_elem_gain_dict'] = self.bs_elem_gain[bs_id]
             self.bs_set[bs_id].set_channels(ue_id=self.ue_id, link_state=channel.link_state, pl=channel.pl, data=data)
-            pl_list.append(channel.pl)
 
-        if codebook_bf is False:
-            # calculate the long-term beamforming vectors
-            path_gain = pl_list[self.serving_bs_id] - self.bs_elem_gain[self.serving_bs_id][self.serving_bs_sect_ind] \
-                        - self.ue_elem_gain[self.serving_bs_id][self.serving_bs_sect_ind]
-            self.ue_w_bf = self.get_long_term_beamforming_vectors \
-                        (ue_sv = self.ue_sv[self.serving_bs_id][self.serving_bs_sect_ind],
-                         bs_sv = self.bs_sv[self.serving_bs_id][self.serving_bs_sect_ind], uplink= True
-                         , n_rand = 10, path_gain = path_gain)
-            self.ue_w_bf_dl = self.get_long_term_beamforming_vectors \
-                        (ue_sv = self.ue_sv[self.serving_bs_id][self.serving_bs_sect_ind],
-                         bs_sv = self.bs_sv[self.serving_bs_id][self.serving_bs_sect_ind], uplink= False
-                         ,n_rand = 10, path_gain = path_gain)
-        else: # do codebook-based beamforming
-            if self.get_ue_type() == 'g_ue':
-                codebook = np.loadtxt('ue_codebook.txt', dtype = complex)
-            else:
-                codebook = np.loadtxt('uav_codebook.txt', dtype= complex)
-            bs_sv = self.bs_sv[self.serving_bs_id][self.serving_bs_sect_ind].T
-            ue_sv = self.ue_sv[self.serving_bs_id][self.serving_bs_sect_ind].T
-
-            H = bs_sv.dot(np.matrix.conj(ue_sv).T) # uplink channel
-            H_dl = ue_sv.dot(np.matrix.conj(bs_sv).T)  # H(f) downlink channel
-            _, _, vh = np.linalg.svd(H)
-            u,_,_ = np.linalg.svd(H_dl)
-            s_u, s_d = -200, -200
-            for  code in codebook:
-                
-                s_i_ul = vh.dot(code)
-                p_ul = np.linalg.norm(s_i_ul)
-                if s_u < p_ul:
-                    self.ue_w_bf = code  # only for uplink
-                    s_u = p_ul
-
-                s_i_dl = code.dot(u)
-                p_dl = np.linalg.norm(s_i_dl)
-                if s_d < p_dl:
-                    self.ue_w_bf_dl = code  # only for uplink
-                    s_d = p_dl
+        # calculate the long-term beamforming vectors
+        self.ue_w_bf = self.get_long_term_beamforming_vectors \
+                    (ue_sv = self.ue_sv[self.serving_bs_id][self.serving_bs_sect_ind],
+                     bs_sv = self.bs_sv[self.serving_bs_id][self.serving_bs_sect_ind], uplink= True)
+        self.ue_w_bf_dl = self.get_long_term_beamforming_vectors \
+                    (ue_sv = self.ue_sv[self.serving_bs_id][self.serving_bs_sect_ind],
+                     bs_sv = self.bs_sv[self.serving_bs_id][self.serving_bs_sect_ind], uplink= False)
 
         self.compute_snrs()
 

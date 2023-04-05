@@ -5,6 +5,8 @@ spherical.py:  Methods for spherical coordinates
 import numpy as np
 
 
+
+
 def cart_to_sph(d):
     """
     Cartesian to spherical coordinates.
@@ -157,71 +159,51 @@ def rotation(phi1, theta1, x1, x2,x3):
     #z1 = np.minimum(1, np.maximum(-1, z1))
     return z1,z2,z3
 
-def spherical_add_sub_new(phi0, theta0, phi1, theta1, sub = True):
-    """
-    Angular addition and subtraction in spherical coordinates
 
-    For addition, we start with a vector at (phi0,theta0), then rotate by
-    theta1 in the (x1,x3) plance and then by phi1 in the (x1,x2) plane.
-    For subtraction, we start with a vector at (phi0,theta0), then rotate by
-    -phi1 in the (x1,x2) plane and then by -theta1 in the (x1,x3) plane.
+def GCS_LCS_conversion(rot_angle: dict(), theta: list(), phi: list()):
+    # GCS to LCS conversion function following 3GPP 38.901, 7.1-7, 7.1-8, and 7.1-15
+    # set rotation angles of UE
+    # alpha: bearing angle, rotation about z axis
+    # beta: downtilt angle, rotation about y axis
+    # gamma: slant angle, rotation about x axis
 
+    # theta, phi are radians
+    # alpha, beta, gamma are all radians
+    # example of the use
+    '''
+     rot_angle = dict()
+    rot_angle['alpha'] = np.deg2rad(30) # 30 degree horizontal rotation
+    rot_angle['beta'] = np.deg2rad(180) # -90 degree down tilted
+    rot_angle['gamma'] = 0
+    theta = [np.deg2rad(97)]
+    phi  = [np.deg2rad(20)]
+    loc_angle, _ = GCS_LCS_conversion(rot_angle, theta, phi)
 
-    Parameters
-    ----------
-    phi0, theta0 : arrays of same size
-        (azimuth,inclination) angle of the initial vector in degrees
-    phi1, theta1 : arrays of same size
-        (azimuth,inclination) angle of the rotation
-    sub:  boolean
-        if true, the angles are subtracted.  otherwise, they are added
+    loc_angle['theta_prime']  = np.rad2deg(loc_angle['theta_prime'])
+    loc_angle['phi_prime']  = np.rad2deg(loc_angle['phi_prime'])
+    '''
+    alpha, beta, gamma = rot_angle['alpha'], rot_angle['beta'], rot_angle['gamma']
 
-    Returns
-    -------
-    phi2, theta2 : arrays of same size as input
-        (azimuth,elevation) angle of the rotated vector
+    k = np.cos(beta) * np.cos(gamma) * np.cos(theta) + (
+                np.sin(beta) * np.cos(gamma) * np.cos(phi - alpha) - np.sin(gamma) * np.sin(phi - alpha)) * np.sin(theta)
+    k = np.minimum(k, 1)
+    theta_prime = np.arccos(k)  # 7.1-7
 
-    """
+    a_jb = (np.cos(beta) * np.sin(theta) * np.cos(phi - alpha) - np.sin(beta) * np.cos(theta) \
+            + 1j * (np.cos(beta) * np.sin(gamma) * np.cos(theta)
+                    + (np.sin(beta) * np.sin(gamma) * np.cos(phi - alpha)
+                       + np.cos(gamma) * np.sin(phi - alpha)) * np.sin(theta)))
+    phi_prime = np.angle(a_jb)  # 7.1-8
 
-    # Convert to radians
-    theta0 = np.pi / 180 * theta0
-    theta1 = np.pi / 180 * theta1
-    phi0 = np.pi / 180 * phi0
-    phi1 = np.pi / 180 * phi1
+    a_jb2 = (np.sin(gamma) * np.cos(theta) * np.sin(phi - alpha) + np.cos(gamma) *
+             (np.cos(beta) * np.sin(theta) - np.sin(beta) * np.cos(theta) * np.cos(phi - alpha)) \
+             + 1j * (np.sin(gamma) * np.cos(phi - alpha) + np.sin(beta) * np.cos(gamma) * np.sin(phi - alpha)))
+    Psi = np.angle(a_jb2)  # 7.1-15
 
-    # Find unit vector in direction of (theta0,phi0)
-    x1 = np.sin(theta0) * np.cos(phi0) # theta is inclination angle
-    x2 = np.sin(theta0) * np.sin(phi0)
-    x3 = np.cos(theta0)
-
-    # we consider z,x,y axis so that antenna arrays can be aligned with z axis
-    #
-    #  BS ----> z-axis ( this is the direction of antenna array)
-    #  |
-    #  |
-    #  v  x-axis
-    # define new basis for x, y, and z axes
-    z = [1,0,0] # z = standard basis x
-    y = [0,1,0] # y = standard basis y
-    x = [0,0,-1] # x = standard basis -z
-
-    # then rotate the basis, x, y, and z by the given angles, phi1 and theta1
-    # and get rotated basis x, y, and z
-    rotated_basis_x = rotation(phi1, theta1, *x)
-    rotated_basis_y = rotation(phi1, theta1, *y)
-    rotated_basis_z = rotation(phi1, theta1, *z)
-
-    dist_vect = np.array([x1,x2,x3]).T
-    # then get each component of x, y, and z in local coordinate
-    # by projecting the distance vector to rotated basis
-    new_z = np.minimum(1, np.maximum(dist_vect@rotated_basis_z, -1))
-    # obtain elevation angle
-    theta2 = np.arcsin(new_z)*180/np.pi
-    new_x = dist_vect@rotated_basis_x
-    new_y = dist_vect@rotated_basis_y
-    phi2 = np.arctan2(new_y, new_x)*180/np.pi
-    return phi2, theta2
-
+    # return local angles and rotation angle
+    local_angle = {'theta_prime': theta_prime, 'phi_prime': phi_prime}
+    # return angles are all radians
+    return local_angle, Psi
 
 
 

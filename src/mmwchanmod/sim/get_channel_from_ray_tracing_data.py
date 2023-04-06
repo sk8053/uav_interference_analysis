@@ -8,7 +8,7 @@ Created on Tue Dec 27 15:46:23 2022
 import numpy as np
 from tqdm import tqdm
 import sys
-sys.path.append("C://Users/gangs/Downloads/Boston/Boston/uav_interference_analysis")
+sys.path.append("../uav_interference_analysis")
 
 from src.mmwchanmod.sim.chanmod import MPChan
 import pandas as pd

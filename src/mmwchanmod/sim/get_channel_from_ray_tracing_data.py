@@ -14,6 +14,13 @@ from src.mmwchanmod.sim.chanmod import MPChan
 import pandas as pd
 
 def get_channel_from_ray_tracing_data(dataframe:pd.DataFrame()):
+    # build channel instance from the pre-defined csv file having certain format
+    # one channel instance includes pathloss, delay, angle of arrival and departure
+    # MPChan channel class is utilized to describe multi-path channel between a Tx and a Rx.
+    
+    # input: data frame corresponding to one link
+    # output: MPChan class having all the multi-path compoenents
+    
     n_path = int(dataframe['n_path'])
     dly_list = []
     pl_list =[]

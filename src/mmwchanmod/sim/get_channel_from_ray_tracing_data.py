@@ -22,7 +22,7 @@ def get_channel_from_ray_tracing_data(dataframe:pd.DataFrame()):
     zoa_list = []
     zod_list = []
     for i in range(n_path):
-        #dly_list.append(float(dataframe['delay_%d'%(i+1)]))
+        dly_list.append(float(dataframe['delay_%d'%(i+1)]))
         pl_list.append(float(dataframe['path_loss_%d'%(i+1)]))
         
         aoa_list.append(float(dataframe['aoa_%d'%(i+1)]))

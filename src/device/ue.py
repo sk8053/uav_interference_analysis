@@ -297,7 +297,7 @@ class UE(object):
             if self.channel_info.ptrl is True:
                 P_ex = (self.channels[serv_bs_id].pl - self.bs_elem_gain[serv_bs_id][self.serving_bs_sect_ind]
                                 - self.ue_elem_gain[serv_bs_id][self.serving_bs_sect_ind]) * self.alpha + self.P0
-                P_ex = 10*np.log10(np.sum(10**(0.01*P_ex)))
+                P_ex = 10*np.log10(np.sum(10**(0.1*P_ex)))
                 self.tx_power = min(P_ex, self.channel_info.UE_TX_power)
             else:
                 self.tx_power = 23
